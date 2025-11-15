@@ -12,8 +12,23 @@ input/*
 pre-input/*
 output/*
 
-# Docs
-docs/*
+# Environment & Secrets
+.env
+*.env.local
+
+# Session & Checkpoint Data
+saa_sessions.db
+*.msgpack
+jobs.db
+
+# Logs
+logs/
+*.log
+
+# Docs (generated)
+docs/_build/
+docs/_static/
+docs/_templates/
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

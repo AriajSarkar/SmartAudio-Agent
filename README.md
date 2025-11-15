@@ -1,248 +1,403 @@
-# AudioBook TTS System - Setup Guide
+# SAA (Smart Audio Agent) 🎙️
 
-**Convert PDF and TXT files to audiobooks with AI voice cloning!**
+**AI-powered audiobook generation with multi-agent orchestration**
 
-## 📋 System Requirements
+Convert PDF and TXT documents into audiobooks with character voice cloning using Google ADK, Replicate cloud TTS, and local XTTS-v2 models.
 
-- **Python**: 3.8 - 3.11 (recommended 3.10)
-- **GPU**: NVIDIA RTX 3050 4GB (CUDA support)
-- **RAM**: 8GB+ recommended
-- **Storage**: 5GB+ for models and dependencies
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Google ADK](https://img.shields.io/badge/Google-ADK-4285F4?logo=google)](https://google.github.io/adk-docs/)
 
 ---
 
-## 🚀 Installation Steps
+## ✨ Features
 
-### 1. Activate Your Virtual Environment
+- **🤖 Multi-Agent Architecture**: Built with Google ADK for intelligent task orchestration
+- **🎭 Character Voice Cloning**: Automatic detection and voice assignment using AI
+- **☁️ Cloud + Local TTS**: Replicate API with automatic fallback to local XTTS-v2
+- **📄 Smart Document Processing**: PDF and TXT extraction with OCR cleanup
+- **🔊 Professional Audio**: Normalization, crossfade merging, multi-format export
+- **💾 Checkpoint/Resume**: Long audiobook support with MessagePack serialization
+- **🖥️ CLI & API**: Command-line tool + FastAPI REST server (planned)
+- **🎯 GPU Optimized**: CUDA acceleration with automatic memory management
+
+---
+
+## 🚀 Quick Start
+
+### Installation
 
 ```powershell
-.venv\Scripts\Activate.ps1
-```
+# Clone repository
+git clone https://github.com/AriajSarkar/saa.git
+cd saa
 
-### 2. Install PyTorch with CUDA Support (for RTX 3050)
+# Create virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 
-```powershell
+# Install PyTorch with CUDA (CRITICAL - do this FIRST!)
 pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+
+# Install SAA in editable mode
+pip install -e .
+
+# Configure environment
+cp .env.example .env
+# Edit .env and add your GOOGLE_API_KEY and REPLICATE_API_TOKEN
 ```
 
-### 3. Install Dependencies
+### Basic Usage
 
 ```powershell
-pip install -r requirements.txt
+# Generate audiobook from PDF
+python -m saa generate input/mybook.pdf -o output/mybook
+
+# Show configuration
+python -m saa config
+
+# Generate sample preview (coming soon)
+python -m saa sample reference_audio/narrator.wav --text "Hello world"
 ```
 
-### 4. Install FFmpeg (Optional but Recommended)
+### Python API
 
-**Option A: Using Chocolatey (easiest)**
-```powershell
-choco install ffmpeg
+```python
+from saa import create_audiobook_pipeline
+import asyncio
+
+async def main():
+    pipeline = create_audiobook_pipeline()
+    
+    # Run pipeline
+    from saa.agents.orchestrator import run_audiobook_generation
+    result = await run_audiobook_generation(
+        input_file="input/book.pdf",
+        output_dir="output/audiobook"
+    )
+    
+    print(f"Status: {result['status']}")
+
+asyncio.run(main())
 ```
-
-**Option B: Manual Installation**
-1. Download from: https://ffmpeg.org/download.html
-2. Extract to `C:\ffmpeg`
-3. Add `C:\ffmpeg\bin` to system PATH
-
-### 5. Verify Installation
-
-```powershell
-python -c "import torch; print(f'CUDA Available: {torch.cuda.is_available()}')"
-```
-
-Should output: `CUDA Available: True`
 
 ---
 
-## 📖 Usage
+## 🏗️ Architecture
 
-### Step 1: Place Your File
+SAA uses a **Custom Agent** inheriting from `BaseAgent` with deterministic 5-stage execution:
 
-Drop your PDF or TXT file into the `input/` folder:
 ```
-AudioBook/input/mybook.pdf
-AudioBook/input/story.txt
-```
+┌─────────────────────────────────────────────────────────────┐
+│          CUSTOM AGENT (AudiobookPipelineAgent)              │
+│              Deterministic Pipeline Execution                │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  1. DocumentExtractor     → Extract + understand structure   │
+│     Tools: extract_text, get_metadata                        │
+│     Gemini: Chapter breaks, dialogue detection               │
+│                                                               │
+│  2. TextPreprocessor      → Clean + segment intelligently    │
+│     Tools: clean_text, filter_content, segment              │
+│     Gemini: Garbage removal, structural meaning              │
+│                                                               │
+│  3. VoicePlanner          → Assign voices with context       │
+│     Tools: detect_characters, analyze_gender, assign_voice   │
+│     Gemini: Emotional tone, speed, prosody decisions         │
+│                                                               │
+│  4. AudioSynthesizer      → Generate TTS (with retry)        │
+│     Tools: synthesize_audio, cleanup_resources               │
+│     Gemini: Retry logic, cloud vs local, error recovery      │
+│                                                               │
+│  5. AudioFinalizer        → Merge + normalize + export       │
+│     Tools: merge_chunks, normalize, export, get_info         │
+│     Gemini: Quality checks, normalization levels             │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
 
-### Step 2: Generate Sample First (RECOMMENDED)
-
-```powershell
-python audiobook.py
-```
-
-The system will auto-detect your file!
-
-This will:
-1. Auto-detect your file from `input/` folder
-2. Generate a **sample audio** from the first ~1000 characters
-3. Save it to `samples/` folder
-4. Ask if you want to continue with full generation
-
-### Step 3: Listen to Sample & Adjust Settings
-
-1. **Play the sample audio** to check voice quality
-2. **Edit `config.py`** to adjust:
-   - `temperature`: Voice expressiveness (0.1-1.0)
-   - `speed`: Playback speed (0.5-2.0)
-   - `language`: Language code
-   - `bitrate`: Audio quality (128k, 192k, 320k)
-
-3. **Re-run** to generate new sample with adjusted settings
-
-### Step 4: Generate Full Audiobook
-
-Once satisfied with sample:
-```powershell
-python audiobook.py
+Philosophy:
+- Tools = Actions (do the work)
+- Gemini = Intelligence (make decisions)
+- Agents = Orchestrators (combine intelligence + tools)
 ```
 
-Choose `y` when prompted to generate full audiobook.
+### Why Custom Agent?
+
+**Deterministic Execution:**
+- ✅ GUARANTEED no step skipping (Python control flow)
+- ✅ Explicit retry logic for TTS failures  
+- ✅ State validation between stages
+- ✅ No wasted LLM calls for routing decisions
+
+**vs. SequentialAgent:**
+- ❌ LLM-based routing can skip steps
+- ❌ Non-deterministic execution order
+- ❌ Extra tokens spent on orchestration
+
+### Agent Tools (15 Functions)
+
+| Domain | Tools | Purpose |
+|--------|-------|---------|
+| **Document** | `extract_text_from_pdf`, `extract_text_from_txt`, `get_document_metadata` | Extract and understand structure |
+| **Text** | `clean_text`, `segment_text`, `filter_unwanted_content` | Clean and intelligently segment |
+| **Voice** | `detect_characters`, `assign_voice_profile`, `analyze_text_gender` | Assign contextual voices |
+| **TTS** | `synthesize_audio`, `cleanup_tts_resources` | Generate audio with retry logic |
+| **Audio** | `merge_audio_chunks`, `normalize_audio`, `export_audio_format`, `get_audio_info` | Finalize audiobook |
+
+### TTS Providers
+
+1. **Replicate (Cloud)**: Fast, scalable, no GPU required
+2. **Local XTTS-v2**: Coqui TTS with voice cloning, requires NVIDIA GPU
+
+**Fallback Strategy**: Replicate → Local (automatic on API failure)
+
+---
+
+## 📋 Requirements
+
+### System Requirements
+- **Python**: 3.11+ and <3.13 (tested with 3.11, 3.12)
+- **GPU**: NVIDIA GPU with 4GB+ VRAM (for local TTS)
+- **CUDA**: 11.8 (for PyTorch)
+- **FFmpeg**: Required for MP3 export
+- **OS**: Windows (PowerShell), Linux, macOS
+
+### API Keys
+- **Google API Key**: Required for ADK agents (Gemini models)
+- **Replicate API Token**: Optional (for cloud TTS)
+
+Get API keys:
+- Google AI Studio: https://aistudio.google.com/app/apikey
+- Replicate: https://replicate.com/account/api-tokens
+
+---
+
+## 🎛️ Configuration
+
+All settings in `.env`:
+
+```bash
+# Google ADK (REQUIRED)
+GOOGLE_API_KEY=AIza...
+GEMINI_TEXT_MODEL=gemini-2.5-flash-lite
+
+# Replicate Cloud TTS (OPTIONAL)
+REPLICATE_API_TOKEN=r8_...
+
+# TTS Settings
+TTS_PROVIDER=auto  # auto, replicate, local
+TTS_USE_GPU=true
+TTS_TEMPERATURE=0.75
+TTS_SPEED=1.0
+
+# Audio Settings
+AUDIO_FORMAT=mp3
+NORMALIZE_AUDIO=true
+CROSSFADE_DURATION=100
+
+# System
+MAX_SEGMENT_LENGTH=800  # chars per TTS call
+SESSION_DB_PATH=./sessions.db
+```
 
 ---
 
 ## 📁 Project Structure
 
 ```
-AudioBook/
-├── input/                      # ← Place your files here!
-│   ├── mybook.pdf             # PDF documents
-│   └── story.txt              # Text files
+SAA/
+├── saa/                        # Main package
+│   ├── agents/                 # ADK agents
+│   │   └── orchestrator.py     # SequentialAgent pipeline
+│   ├── tools/                  # 17 ADK function tools
+│   │   ├── document_tools.py   # PDF/TXT extraction
+│   │   ├── text_tools.py       # Cleaning & segmentation
+│   │   ├── voice_tools.py      # Character detection
+│   │   ├── tts_tools.py        # Synthesis orchestration
+│   │   └── audio_tools.py      # Merging & export
+│   ├── providers/              # TTS backends
+│   │   ├── local_provider.py   # Coqui XTTS-v2
+│   │   └── replicate_provider.py  # Cloud API
+│   ├── models/                 # Data models
+│   │   ├── text_segment.py
+│   │   ├── voice_profile.py
+│   │   ├── audio_metadata.py
+│   │   └── job_state.py
+│   ├── config/                 # Pydantic settings
+│   │   └── settings.py
+│   ├── cli/                    # Click CLI
+│   │   └── app.py
+│   └── exceptions.py           # Custom errors
+├── reference_audio/            # Voice cloning samples
+│   ├── narrator.wav            # Narrator voice
+│   ├── male.wav                # Male character
+│   └── female.wav              # Female character
+├── input/                      # Input documents
 ├── output/                     # Generated audiobooks
-│   └── mybook_audiobook_[timestamp].mp3
-├── samples/                    # Sample previews
-│   └── sample_[timestamp].mp3
-├── reference_audio/            # Voice samples for cloning
-│   └── female_en_1_reference.wav
-├── audiobook.py               # Main script
-├── config.py                  # Configuration
-└── requirements.txt           # Dependencies
+├── tests/                      # Test suite (coming soon)
+├── .env                        # Environment config
+├── pyproject.toml              # Package metadata
+└── README.md                   # This file
 ```
 
 ---
 
-## ⚙️ Configuration Options
+## 🎤 Voice Cloning Setup
 
-Edit `config.py` to customize:
+SAA requires **reference audio files** for voice cloning:
 
-### Voice Quality
-```python
-TTS_CONFIG = {
-    "temperature": 0.75,  # 0.1 (monotone) to 1.0 (expressive)
-    "speed": 1.0,         # 0.5 (slow) to 2.0 (fast)
-    "language": "en",     # en, es, fr, de, it, pt, etc.
-}
+1. **Create** 6-15 second WAV files of clear speech
+2. **Place** in `reference_audio/` folder:
+   - `narrator.wav` - Default narrator voice
+   - `male.wav` - Male characters
+   - `female.wav` - Female characters
+3. **Run** audiobook generation
+
+**Tips for best results:**
+- Use 22050 Hz sample rate
+- Remove background noise
+- Clear pronunciation, natural speech
+- 6-15 seconds duration (not too short/long)
+
+See `docs/CHARACTER_VOICE_GUIDE.md` for detailed instructions.
+
+---
+
+## 🔧 Development
+
+### Setup Development Environment
+
+```powershell
+# Install with dev dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Code formatting
+black saa/
+ruff check saa/
+
+# Type checking
+mypy saa/
 ```
 
-### Audio Export
-```python
-AUDIO_CONFIG = {
-    "format": "mp3",      # mp3, wav, ogg
-    "bitrate": "192k",    # 128k, 192k, 320k
-}
-```
+### Running Tests
 
-### Voice Cloning (Optional)
-```python
-TTS_CONFIG = {
-    "speaker_wav": "path/to/reference_audio.wav",  # 6+ seconds of speech
-}
+```powershell
+# All tests
+pytest
+
+# With coverage
+pytest --cov=saa --cov-report=html
+
+# Specific test
+pytest tests/unit/test_tools.py -v
 ```
 
 ---
 
-## 📁 File Structure
+## 📚 Documentation
 
-```
-AudioBook/
-├── audiobook.py        # Main script (renamed from TTS.py)
-├── config.py           # Settings
-├── pdf_processor.py    # PDF extraction
-├── tts_engine.py       # TTS generation
-├── audio_utils.py      # Audio processing
-├── requirements.txt    # Dependencies
-├── TTS.pdf            # Your PDF file
-├── output/            # Generated audiobooks
-└── samples/           # Sample previews
-```
-
----
-
-## 🎯 Optimization for RTX 3050 4GB
-
-Your GPU is perfect for this! The system is optimized for 4GB VRAM:
-
-- ✅ **Chunk processing**: Processes text in small chunks to avoid memory overflow
-- ✅ **GPU acceleration**: Uses CUDA for 5-10x faster generation
-- ✅ **Auto memory cleanup**: Clears GPU memory after generation
-
-### Expected Performance:
-- **Sample generation**: 10-30 seconds
-- **Full audiobook**: ~1-3 minutes per page (GPU)
-- **Memory usage**: 2-3GB VRAM
+- **[QUICKSTART.md](docs/QUICKSTART.md)** - Installation & first audiobook
+- **[CHARACTER_VOICE_GUIDE.md](docs/CHARACTER_VOICE_GUIDE.md)** - Voice cloning setup
+- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - Common errors
+- **[TODO.md](TODO.md)** - Planned features
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development guidelines
 
 ---
 
 ## 🐛 Troubleshooting
 
-### CUDA Not Available
+### Common Issues
+
+**"ModuleNotFoundError: No module named 'TTS'"**
 ```powershell
-# Reinstall PyTorch with CUDA
-pip uninstall torch torchaudio
-pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install TTS==0.22.0
 ```
 
-### Out of Memory Error
-Reduce chunk size in `config.py`:
-```python
-PDF_CONFIG = {
-    "chunk_size": 300,  # Default is 500
-}
+**"CUDA out of memory"**
+- Reduce `MAX_SEGMENT_LENGTH` in `.env`
+- Use `TTS_PROVIDER=replicate` for cloud fallback
+
+**"FFmpeg not found"**
+```powershell
+# Windows (WinGet)
+winget install Gyan.FFmpeg
+
+# Or download from: https://ffmpeg.org/download.html
 ```
 
-### Poor Audio Quality
-1. Increase bitrate: `"bitrate": "320k"`
-2. Install FFmpeg for better encoding
-3. Adjust temperature: `"temperature": 0.65`
+**"Replicate API authentication failed"**
+- Check `REPLICATE_API_TOKEN` in `.env`
+- Verify token at https://replicate.com/account/api-tokens
+- Fallback to local: `TTS_PROVIDER=local`
+
+See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 ---
 
-## 🎤 Available Languages
+## 🗺️ Roadmap
 
-Supported by XTTS-v2:
-- English (en)
-- Spanish (es)
-- French (fr)
-- German (de)
-- Italian (it)
-- Portuguese (pt)
-- Polish (pl)
-- Turkish (tr)
-- Russian (ru)
-- Dutch (nl)
-- Czech (cs)
-- Arabic (ar)
-- Chinese (zh-cn)
-- Japanese (ja)
-- Hungarian (hu)
-- Korean (ko)
+### v2.0.0 (Current)
+- ✅ Google ADK multi-agent architecture
+- ✅ Replicate cloud TTS + local fallback
+- ✅ Character voice detection & assignment
+- ✅ CLI interface (basic)
+- 🔄 FastAPI REST API (in progress)
+- 🔄 Checkpoint/resume (in progress)
 
----
+### v2.1.0 (Planned)
+- 📋 Web UI for audiobook management
+- 📋 Authentication & user system
+- 📋 Multi-model TTS support (ElevenLabs, Azure)
+- 📋 Advanced character detection (NER, dialogue tracking)
+- 📋 Audio caching for repeated segments
 
-## 📝 Tips for Best Results
+### v3.0.0 (Future)
+- 📋 Real-time streaming TTS
+- 📋 Custom voice training
+- 📋 Emotion/prosody control
+- 📋 Multi-language support
+- 📋 Cloud deployment (Docker, K8s)
 
-1. **Always test with sample first** - Saves time if settings need adjustment
-2. **Use clean PDFs** - Better text extraction = better audio
-3. **Adjust temperature** - Lower for technical content, higher for fiction
-4. **Enable FFmpeg** - Significantly better audio quality
-5. **Keep chunks small** - Better pronunciation and pacing
+See [TODO.md](TODO.md) for complete roadmap.
 
 ---
 
-## 🆘 Support
+## 🤝 Contributing
 
-If you encounter issues:
-1. Check Python version (3.8-3.11)
-2. Verify CUDA installation
-3. Ensure .venv is activated
-4. Check `samples/` folder for test output
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-Enjoy your AI-generated audiobook! 🎧📚
+### Key Areas Needing Help
+- **Testing**: Unit tests for all tools and agents
+- **Documentation**: Tutorials, examples, API docs
+- **Features**: Web UI, additional TTS providers
+- **Optimization**: GPU memory, inference speed
+
+---
+
+## 📝 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- **Google ADK**: Multi-agent orchestration framework
+- **Coqui TTS**: Open-source XTTS-v2 model
+- **Replicate**: Cloud GPU infrastructure
+- **PyTorch**: Deep learning framework
+
+---
+
+## 📧 Contact
+
+- **GitHub Issues**: https://github.com/AriajSarkar/saa/issues
+- **Email**: your.email@example.com
+
+---
+
+**Made with ❤️ using Google ADK**
