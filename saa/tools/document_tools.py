@@ -77,11 +77,20 @@ def extract_text_from_pdf(file_path: str, use_pdfplumber: bool = True) -> Dict[s
         # Combine all pages
         full_text = "\n\n".join(p['text'] for p in pages)
         
+        # Save to workspace if available
+        from saa.utils.workspace import WorkspaceManager
+        workspace = WorkspaceManager()
+        output_file = workspace.save_extracted_text(full_text)
+        
         return {
             "status": "success",
             "text": full_text,
             "pages": pages,
             "metadata": metadata,
+            "output_file": str(output_file),
+            "total_pages": len(pages),
+            "total_chars": len(full_text),
+            "summary": f"Extracted {len(pages)} pages, {len(full_text)} characters from PDF",
             "error": None
         }
     
@@ -91,6 +100,10 @@ def extract_text_from_pdf(file_path: str, use_pdfplumber: bool = True) -> Dict[s
             "text": "",
             "pages": [],
             "metadata": {},
+            "output_file": "",
+            "total_pages": 0,
+            "total_chars": 0,
+            "summary": f"Failed to extract PDF: {str(e)}",
             "error": str(e)
         }
 
@@ -150,10 +163,19 @@ def extract_text_from_txt(file_path: str) -> Dict[str, Any]:
                 'text': page_text
             })
         
+        # Save to workspace
+        from saa.utils.workspace import WorkspaceManager
+        workspace = WorkspaceManager()
+        output_file = workspace.save_extracted_text(cleaned)
+        
         return {
             "status": "success",
             "text": cleaned,
             "pages": pages,
+            "output_file": str(output_file),
+            "total_pages": len(pages),
+            "total_chars": len(cleaned),
+            "summary": f"Extracted text file, {len(pages)} pseudo-pages, {len(cleaned)} characters",
             "error": None
         }
     
@@ -162,6 +184,10 @@ def extract_text_from_txt(file_path: str) -> Dict[str, Any]:
             "status": "error",
             "text": "",
             "pages": [],
+            "output_file": "",
+            "total_pages": 0,
+            "total_chars": 0,
+            "summary": f"Failed to extract TXT: {str(e)}",
             "error": str(e)
         }
 

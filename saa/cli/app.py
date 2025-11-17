@@ -88,12 +88,10 @@ def generate(ctx, input_file, output, format, provider, session_id):
     
     # Run pipeline
     try:
-        # Import ADK pipeline
-        from saa.agents.agent import root_agent
-        from google.adk.runners import InMemoryRunner
+        # Import new orchestrator
+        from saa.agents.orchestrator import AudiobookOrchestrator
         
-        # Create runner
-        runner = InMemoryRunner(agent=root_agent)
+        console.print("\n[cyan]🚀 Initializing 5-stage ADK pipeline...[/cyan]")
         
         with Progress(
             SpinnerColumn(),
@@ -105,17 +103,30 @@ def generate(ctx, input_file, output, format, provider, session_id):
             
             task = progress.add_task("[cyan]Generating audiobook...", total=None)
             
-            # Run agent
+            # Create orchestrator
+            orchestrator = AudiobookOrchestrator(
+                input_file=input_path,
+                output_dir=Path(output),
+                job_id=session_id
+            )
+            
+            # Run pipeline
             async def run():
-                return await runner.run_debug(
-                    f"Generate an audiobook from: {str(input_path)}"
-                )
+                return await orchestrator.run_async()
             
             result = asyncio.run(run())
             progress.update(task, completed=True)
         
-        console.print(f"\n✅ [bold green]Audiobook generated successfully![/bold green]")
-        console.print(f"📁 Check {output}/ directory for results")
+        # Check result
+        if result["status"] == "success":
+            console.print(f"\n✅ [bold green]Audiobook generated successfully![/bold green]")
+            console.print(f"📁 Output directory: [cyan]{result['output_dir']}[/cyan]")
+            console.print(f"🎵 Generated files:")
+            for file in result.get("output_files", []):
+                console.print(f"   • {Path(file).name}")
+        else:
+            console.print(f"\n[red]❌ Generation failed: {result.get('error')}[/red]")
+            sys.exit(1)
         
         # Suppress aiohttp shutdown errors (professional cleanup)
         sys.stderr = open(os.devnull, 'w')

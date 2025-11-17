@@ -29,8 +29,8 @@ Convert PDF and TXT documents into audiobooks with character voice cloning using
 
 ```powershell
 # Clone repository
-git clone https://github.com/AriajSarkar/saa.git
-cd saa
+git clone https://github.com/AriajSarkar/SmartAudio-Agent.git
+cd SmartAudio-Agent
 
 # Create virtual environment
 python -m venv .venv
@@ -81,16 +81,38 @@ async def main():
 asyncio.run(main())
 ```
 
+### Advanced Features
+
+SAA includes production-ready features for Google ADK:
+
+```python
+# Observability with LoggingPlugin
+from saa.observability import create_observability_plugin
+runner = Runner(agent=pipeline, plugins=[create_observability_plugin()])
+
+# Session management
+from saa.sessions import create_session_service
+session_service = create_session_service(persistent=True)
+runner = Runner(agent=pipeline, session_service=session_service)
+
+# Agent evaluation
+from saa.evaluation import create_evaluator
+evaluator = create_evaluator()
+results = evaluator.evaluate_extraction(input_file)
+```
+
+**See**: `examples/advanced_features.py` for complete demonstrations
+
 ---
 
 ## 🏗️ Architecture
 
-SAA uses a **Custom Agent** inheriting from `BaseAgent` with deterministic 5-stage execution:
+SAA uses **Google ADK's AgentTool Coordinator pattern** for intelligent, file-based audiobook generation:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│          CUSTOM AGENT (AudiobookPipelineAgent)              │
-│              Deterministic Pipeline Execution                │
+│          PIPELINE COORDINATOR (Gemini-Powered)              │
+│        Calls Stage Agents as Tools + Verifies Files         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  1. DocumentExtractor     → Extract + understand structure   │
@@ -121,18 +143,18 @@ Philosophy:
 - Agents = Orchestrators (combine intelligence + tools)
 ```
 
-### Why Custom Agent?
+### Why AgentTool Coordinator?
 
-**Deterministic Execution:**
-- ✅ GUARANTEED no step skipping (Python control flow)
-- ✅ Explicit retry logic for TTS failures  
-- ✅ State validation between stages
-- ✅ No wasted LLM calls for routing decisions
+**Gemini-Powered Intelligence:**
+- ✅ Coordinator uses Gemini to orchestrate workflow
+- ✅ File-based verification between stages (no hallucinations)
+- ✅ Explicit error handling with retry logic
+- ✅ Clear progress communication to user
 
-**vs. SequentialAgent:**
-- ❌ LLM-based routing can skip steps
-- ❌ Non-deterministic execution order
-- ❌ Extra tokens spent on orchestration
+**vs. SequentialAgent (initial approach):**
+- ❌ LLM-based routing skipped synthesis stage entirely
+- ❌ output_key state passing caused hallucinations
+- ❌ No explicit file verification
 
 ### Agent Tools (15 Functions)
 
@@ -196,7 +218,7 @@ NORMALIZE_AUDIO=true
 CROSSFADE_DURATION=100
 
 # System
-MAX_SEGMENT_LENGTH=800  # chars per TTS call
+MAX_SEGMENT_LENGTH=250  # chars per TTS call (prevents truncation warnings)
 SESSION_DB_PATH=./sessions.db
 ```
 
@@ -208,7 +230,7 @@ SESSION_DB_PATH=./sessions.db
 SAA/
 ├── saa/                        # Main package
 │   ├── agents/                 # ADK agents
-│   │   └── orchestrator.py     # SequentialAgent pipeline
+│   │   └── orchestrator.py     # AgentTool coordinator pipeline
 │   ├── tools/                  # 17 ADK function tools
 │   │   ├── document_tools.py   # PDF/TXT extraction
 │   │   ├── text_tools.py       # Cleaning & segmentation
@@ -338,6 +360,63 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 
 ---
 
+## ☁️ Deployment
+
+### Production Deployment Options
+
+SAA can be deployed to Google Cloud Platform for production use:
+
+#### 1. Vertex AI Agent Engine (Recommended)
+**Best for**: Production AI agents with auto-scaling
+
+```powershell
+# Deploy to Agent Engine
+adk deploy agent_engine . --project=your-project-id --region=us-central1
+```
+
+**Configuration** (`.agent_engine_config.json`):
+```json
+{
+  "min_instances": 0,
+  "max_instances": 3,
+  "resource_limits": {
+    "cpu": "2",
+    "memory": "4Gi"
+  }
+}
+```
+
+#### 2. Cloud Run (Serverless)
+**Best for**: Simple deployments, cost-effective small workloads
+
+```powershell
+# Build and deploy
+docker build -t gcr.io/PROJECT_ID/saa .
+gcloud run deploy saa --image gcr.io/PROJECT_ID/saa --memory 4Gi
+```
+
+#### 3. Google Kubernetes Engine
+**Best for**: Enterprise deployments with full control
+
+```powershell
+# Create cluster and deploy
+gcloud container clusters create saa-cluster
+kubectl apply -f k8s/deployment.yaml
+```
+
+### Deployment Checklist
+
+- ✅ Set `GOOGLE_GENAI_USE_VERTEXAI=1` in production `.env`
+- ✅ Use Secret Manager for API keys (never commit `.env`)
+- ✅ Configure resource limits based on workload
+- ✅ Enable auto-scaling (`min_instances: 0` for dev, `1+` for prod)
+- ✅ Set up monitoring and logging
+- ✅ Configure budget alerts to control costs
+
+**Detailed deployment guide**: See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
+---
+
 ## 🗺️ Roadmap
 
 ### v2.0.0 (Current)
@@ -345,6 +424,9 @@ See [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for more solutions.
 - ✅ Replicate cloud TTS + local fallback
 - ✅ Character voice detection & assignment
 - ✅ CLI interface (basic)
+- ✅ Observability with LoggingPlugin
+- ✅ Session management (multi-turn conversations)
+- ✅ Agent evaluation framework
 - 🔄 FastAPI REST API (in progress)
 - 🔄 Checkpoint/resume (in progress)
 

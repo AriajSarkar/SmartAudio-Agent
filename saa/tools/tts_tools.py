@@ -205,10 +205,27 @@ def synthesize_audio(
     # Override output_path to use temp directory for chunks
     if use_temp_dir:
         settings = get_settings()
-        temp_dir = settings.temp_dir
+        # Ensure temp_dir is absolute
+        if not settings.temp_dir.is_absolute():
+            temp_dir = Path.cwd() / settings.temp_dir
+        else:
+            temp_dir = settings.temp_dir
         temp_dir.mkdir(parents=True, exist_ok=True)
-        output_filename = Path(output_path).name
-        output_path = str(temp_dir / output_filename)
+        
+        # Preserve subdirectory structure (e.g., voices/chunk_0000.wav)
+        output_path_obj = Path(output_path)
+        if len(output_path_obj.parts) > 1:
+            # Has subdirectory (e.g., "voices/chunk_0000.wav")
+            subdir = output_path_obj.parent
+            filename = output_path_obj.name
+            full_output_dir = temp_dir / subdir
+            full_output_dir.mkdir(parents=True, exist_ok=True)
+            output_path = str(full_output_dir / filename)
+        else:
+            # Just filename (e.g., "chunk_0000.wav")
+            output_filename = output_path_obj.name
+            output_path = str(temp_dir / output_filename)
+        
         logger.info(f"[TTS] Redirecting output to temp_dir: {output_path}")
     else:
         logger.info(f"[TTS] Using direct output path: {output_path}")

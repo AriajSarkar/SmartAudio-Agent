@@ -29,6 +29,7 @@ class SAAError(Exception):
 class DocumentError(SAAError):
     """Document processing errors"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="DOC_ERROR", **kwargs)
 
 
@@ -55,6 +56,7 @@ class UnsupportedFormatError(DocumentError):
 class TextProcessingError(SAAError):
     """Text processing errors"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="TEXT_ERROR", **kwargs)
 
 
@@ -72,6 +74,7 @@ class SegmentTooLongError(TextProcessingError):
 class GPUError(SAAError):
     """GPU-related errors"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="GPU_ERROR", **kwargs)
 
 
@@ -89,6 +92,8 @@ class GPUOutOfMemoryError(GPUError):
 class TTSError(SAAError):
     """TTS synthesis errors"""
     def __init__(self, message: str, **kwargs):
+        # Extract code if present in kwargs to avoid conflict
+        kwargs.pop('code', None)
         super().__init__(message, code="TTS_ERROR", **kwargs)
 
 
@@ -106,12 +111,15 @@ class VoiceReferenceError(TTSError):
 class LocalTTSError(TTSError):
     """Local TTS provider errors"""
     def __init__(self, message: str, **kwargs):
+        # Extract code if present in kwargs to avoid conflict
+        kwargs.pop('code', None)
         super().__init__(message, code="LOCAL_TTS_ERROR", **kwargs)
 
 
 class ReplicateError(SAAError):
     """Replicate API errors"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="REPLICATE_ERROR", **kwargs)
 
 
@@ -140,18 +148,21 @@ class ReplicateAPIError(ReplicateError):
 class AudioProcessingError(SAAError):
     """Audio processing errors"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="AUDIO_ERROR", **kwargs)
 
 
 class AudioMergeError(AudioProcessingError):
     """Audio merge failed"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="AUDIO_MERGE_ERROR", **kwargs)
 
 
 class CheckpointError(SAAError):
     """Checkpoint/resume errors"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="CHECKPOINT_ERROR", **kwargs)
 
 
@@ -178,6 +189,7 @@ class CheckpointNotFoundError(CheckpointError):
 class ConfigurationError(SAAError):
     """Configuration errors"""
     def __init__(self, message: str, **kwargs):
+        kwargs.pop('code', None)
         super().__init__(message, code="CONFIG_ERROR", **kwargs)
 
 

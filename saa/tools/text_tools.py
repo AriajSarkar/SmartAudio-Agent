@@ -3,9 +3,61 @@ Text processing tools (ADK function tools)
 Clean, normalize, and segment text for TTS processing
 """
 import re
+from pathlib import Path
 from typing import Dict, Any, List
 from saa.models import TextSegment
 from saa.constants import MAX_SEGMENT_LENGTH, SAFE_SEGMENT_LENGTH
+
+
+def read_text_file(file_path: str) -> Dict[str, Any]:
+    """
+    Read text content from a file.
+    
+    Use this tool to load extracted text before processing.
+    Typically used to read from output/.temp/extracted/extracted.txt.
+    
+    Args:
+        file_path: Path to text file (e.g., "output/.temp/extracted/extracted.txt")
+    
+    Returns:
+        Dictionary with:
+            - status: "success" or "error"
+            - text: File content as string
+            - file_path: Path that was read
+            - char_count: Number of characters
+            - error: Error message if failed
+    """
+    try:
+        path = Path(file_path)
+        
+        if not path.exists():
+            return {
+                "status": "error",
+                "text": None,
+                "file_path": str(file_path),
+                "char_count": 0,
+                "error": f"File not found: {file_path}"
+            }
+        
+        # Read with UTF-8 encoding
+        text = path.read_text(encoding='utf-8')
+        
+        return {
+            "status": "success",
+            "text": text,
+            "file_path": str(file_path),
+            "char_count": len(text),
+            "error": None
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "text": None,
+            "file_path": str(file_path),
+            "char_count": 0,
+            "error": f"Failed to read file: {str(e)}"
+        }
 
 
 def clean_text(raw_text: str) -> Dict[str, Any]:
@@ -75,13 +127,16 @@ def clean_text(raw_text: str) -> Dict[str, Any]:
         # Final trim
         text = text.strip()
         
+        cleaned_length = len(text)
+        
         return {
             "status": "success",
             "cleaned_text": text,
             "changes_made": changes,
             "original_length": original_length,
-            "cleaned_length": len(text),
-            "error": None
+            "cleaned_length": cleaned_length,
+            "chars_removed": original_length - cleaned_length,
+            "summary": f"Cleaned text: {len(changes)} operations, removed {original_length - cleaned_length} chars"
         }
     
     except Exception as e:
@@ -197,12 +252,32 @@ def segment_text(
         avg_length = sum(lengths) / len(lengths) if lengths else 0
         longest = max(lengths) if lengths else 0
         
+        # Save to workspace as chunks.json
+        from saa.utils.workspace import WorkspaceManager
+        workspace = WorkspaceManager()
+        
+        # Convert segments to chunks with voice metadata placeholders
+        chunks = []
+        for seg in segments:
+            chunks.append({
+                "id": seg["index"],
+                "text": seg["text"],
+                "voice": "neutral",  # Default, can be updated by voice tools
+                "speed": 1.0,
+                "emotion": "neutral"
+            })
+        
+        output_file = workspace.save_chunks_json(chunks)
+        
         return {
             "status": "success",
             "segments": segments,
+            "chunks": chunks,
+            "output_file": str(output_file),
             "total_segments": len(segments),
             "avg_segment_length": round(avg_length, 2),
             "longest_segment": longest,
+            "summary": f"Created {len(segments)} chunks, avg {round(avg_length)} chars, saved to {output_file.name}",
             "error": None
         }
     
@@ -210,7 +285,12 @@ def segment_text(
         return {
             "status": "error",
             "segments": [],
+            "chunks": [],
+            "output_file": "",
             "total_segments": 0,
+            "avg_segment_length": 0,
+            "longest_segment": 0,
+            "summary": f"Segmentation failed: {str(e)}",
             "error": str(e)
         }
 

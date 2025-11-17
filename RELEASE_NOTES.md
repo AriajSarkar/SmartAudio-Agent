@@ -17,13 +17,18 @@ The **Smart Audio Agent (SAA) v2.0** refactoring is **95% complete**. All core c
 
 ### 🤖 Multi-Agent Architecture
 
-Replaced monolithic scripts with **5 specialized ADK agents**:
+Replaced monolithic scripts with **5 specialized ADK agents** coordinated by a Gemini-powered coordinator:
 
 ```
-Document Agent → Preprocessing Agent → Voice Planning Agent → Synthesis Agent → Finalization Agent
+PipelineCoordinator (Gemini)
+  ├─> ExtractionAgent (as AgentTool)
+  ├─> StagingAgent (as AgentTool)
+  ├─> VoiceGenerationAgent (as AgentTool)
+  ├─> MergeAgent (as AgentTool)
+  └─> CleanupAgent (as AgentTool)
 ```
 
-Each agent uses specific tools and passes state via `output_key` templates.
+Each agent uses specific tools with file-based coordination (no output_key hallucinations).
 
 ### ☁️ Cloud + Local TTS
 
@@ -99,7 +104,7 @@ python -m saa --help
 
 ### Agents (2 files)
 - saa/agents/__init__.py
-- saa/agents/orchestrator.py (5 agents + SequentialAgent)
+- saa/agents/orchestrator.py (6 agents: 5 stages + coordinator with AgentTool pattern)
 
 ### CLI (3 files)
 - saa/cli/__init__.py
@@ -205,7 +210,7 @@ See [TODO.md](TODO.md) for complete roadmap.
 
 ### Architecture
 ✅ Clean separation: Agents → Tools → Providers  
-✅ Google ADK best practices (function tools, sequential pipeline)  
+✅ Google ADK best practices (AgentTool coordinator, file-based verification)  
 ✅ Type-safe configuration with Pydantic  
 ✅ Custom exception hierarchy with recovery flags  
 
