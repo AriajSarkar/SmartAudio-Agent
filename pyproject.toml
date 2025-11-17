@@ -25,6 +25,7 @@ classifiers = [
 
 dependencies = [
     "google-adk>=1.18.0",
+    "litellm>=1.80.0",  # Required for LiteLlm wrapper (Ollama/OpenRouter support)
     "replicate>=1.0.7",
     "coqui-tts>=0.24.0",
     "pydub>=0.25.1",

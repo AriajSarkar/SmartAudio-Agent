@@ -3,9 +3,9 @@ Extraction Agent - Stage 1 of audiobook pipeline (ADK LlmAgent)
 Extracts raw text from PDF or TXT files using Gemini intelligence
 """
 from google.adk.agents import LlmAgent
-from google.adk.models import Gemini
 
 from saa.config import get_settings
+from saa.models import get_model_provider
 from saa.tools.document_tools import extract_text_from_pdf, extract_text_from_txt, get_document_metadata
 
 settings = get_settings()
@@ -20,18 +20,53 @@ def create_extraction_agent() -> LlmAgent:
     - Understands document structure (chapters, metadata)
     - Saves to .temp/extracted/extracted.txt
     
-    Gemini Intelligence:
-    - Identifies document type and structure
-    - Detects chapter breaks vs continuous text
-    - Filters metadata (TOC, headers, footers)
-    - Recognizes dialogue vs narration sections
+    GEMINI INTELLIGENCE - What AI Decides:
+    ======================================
+    
+    1. Document Type Recognition:
+       - Is this a PDF or TXT file? (file extension analysis)
+       - Which extraction tool should I call? (pdf vs txt)
+    
+    2. Structure Understanding:
+       - Are there chapter headings? ("Chapter 1", "Part I")
+       - Is this a novel, textbook, or article? (formatting patterns)
+       - Should I preserve or merge paragraphs? (spacing analysis)
+    
+    3. Metadata Filtering:
+       - Are these page numbers to ignore? ("Page 23")
+       - Is this a table of contents? ("Chapter ... Page")
+       - Are these headers/footers? (repeated at top/bottom)
+    
+    4. Content Classification:
+       - Is this dialogue or narration? (quotation marks)
+       - Are there multiple speakers? (character names)
+       - Is this descriptive or action text? (verb tense, pacing)
+    
+    5. Quality Verification:
+       - Does the extracted text make sense? (coherence check)
+       - Are there OCR errors to flag? (garbled characters)
+       - Is character count reasonable? (not empty or truncated)
+    
+    WHY AI? (Why This Needs Intelligence):
+    --------------------------------------
+    WHY THIS MATTERS:
+    ----------------
+    Without Gemini intelligence, you'd get:
+    - Raw extracted text with page numbers mixed in
+    - Headers/footers repeated every page
+    - No understanding of structure for later stages
+    
+    With Gemini, you get:
+    - Clean text ready for segmentation
+    - Structural hints for voice assignment
+    - Quality-checked output
     
     Returns:
-        LlmAgent configured for document extraction
+        LlmAgent configured for intelligent document extraction
     """
     return LlmAgent(
         name="ExtractionAgent",
-        model=Gemini(model=settings.gemini_text_model),
+        model=get_model_provider(),  # Auto-selects provider from env (Gemini/Ollama/OpenRouter)
         instruction="""
 You are an intelligent document extraction agent.
 

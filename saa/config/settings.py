@@ -53,10 +53,46 @@ class Settings(BaseSettings):
         description="Gemini pro model for complex tasks"
     )
     
-    # Replicate Configuration
+    # Replicate Configuration (TTS only)
     replicate_api_token: Optional[str] = Field(
         default=None,
         description="Replicate API token (optional - falls back to local TTS)"
+    )
+    
+    # LLM Provider Configuration (for agents, NOT TTS)
+    llm_provider: Literal["gemini", "ollama", "openrouter"] = Field(
+        default="gemini",
+        description="LLM provider for agents (gemini|ollama|openrouter)"
+    )
+    
+    # Ollama Configuration (local LLM)
+    ollama_model: str = Field(
+        default="mistral-small3.1",
+        description="Ollama model name (e.g., mistral-small3.1, llama3.1)"
+    )
+    ollama_api_base: Optional[str] = Field(
+        default=None,
+        description="Ollama API base URL (defaults to http://localhost:11434)"
+    )
+    ollama_api_key: Optional[str] = Field(
+        default="placeholder",
+        description="Ollama API key placeholder (not needed for local, reserved for future cloud Ollama)"
+    )
+    
+    # OpenRouter Configuration (cloud LLM)
+    openrouter_model: str = Field(
+        default="anthropic/claude-3.5-sonnet",
+        description="OpenRouter model ID (e.g., anthropic/claude-3.5-sonnet, google/gemini-2.5-flash)"
+    )
+    openrouter_api_key: Optional[str] = Field(
+        default=None,
+        description="OpenRouter API key (required if using OpenRouter)"
+    )
+    
+    # Session Management
+    session_db_path: Optional[str] = Field(
+        default="./sessions.db",
+        description="Path to SQLite database for persistent sessions"
     )
     
     # TTS Provider

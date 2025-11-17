@@ -3,8 +3,8 @@ Voice Generation Agent - Stage 3 of audiobook pipeline (ADK LlmAgent)
 Generates audio for each chunk using Gemini-guided TTS synthesis
 """
 from google.adk.agents import LlmAgent
-from google.adk.models import Gemini
 
+from saa.models import get_model_provider
 from saa.config import get_settings
 from saa.tools.tts_tools import synthesize_audio, cleanup_tts_resources
 import json
@@ -62,19 +62,99 @@ def create_voice_generation_agent() -> LlmAgent:
     - Handles Replicate/local TTS fallback
     - Saves to .temp/voices/chunk_<id>.wav
     
-    Gemini Intelligence:
-    - Decides retry parameters for failed synthesis
-    - Chooses cloud vs local TTS strategy
-    - Handles error recovery (text rewriting)
-    - Optimizes synthesis quality settings
-    - Manages GPU resources
+    GEMINI INTELLIGENCE - TTS Orchestration Decisions:
+    =================================================
+    
+    1. Retry Strategy for Failed Synthesis:
+       DECISION: "Why did synthesis fail and how should I retry?"
+       
+       Scenario A: "Text too complex for TTS"
+       - Original: "The xylophonist's quixotic performance..."
+       - AI rewrites: "The musician's unusual performance..."
+       - Retry with simplified text
+       
+       Scenario B: "API rate limit hit"
+       - Wait 2 seconds, retry with same parameters
+       - If fails again, fall back to local TTS
+       
+       Scenario C: "Text has special characters"
+       - Clean: "Price: $19.99" → "Price: nineteen ninety-nine"
+       - Retry with cleaned text
+       
+       WHY AI?: Diagnosis requires understanding error context
+    
+    2. Cloud vs Local TTS Decision:
+       DECISION: "Which TTS provider should I use for this chunk?"
+       
+       Use Replicate (cloud) when:
+       - ✅ API token available
+       - ✅ Text is standard (no special requirements)
+       - ✅ Speed more important than cost
+       
+       Use Local XTTS when:
+       - ✅ Replicate failed (fallback)
+       - ✅ GPU available locally
+       - ✅ Privacy required (sensitive text)
+       
+       WHY AI?: Adaptive provider selection based on context
+    
+    3. Error Recovery - Text Rewriting:
+       DECISION: "Can I rewrite this text to work with TTS?"
+       
+       Problematic: "He said, 'I can't—no, I won't—do that.'"
+       - TTS chokes on nested punctuation
+       
+       AI rewrites: "He said he couldn't and wouldn't do that."
+       - Preserves meaning, TTS-friendly format
+       
+       WHY AI?: Semantic-preserving rewrites, not just regex
+    
+    4. Quality Settings Optimization:
+       DECISION: "What synthesis parameters produce best quality?"
+       
+       For emotional speech:
+       - temperature=0.85 (more expressive)
+       - speed=1.1 (slightly faster for excitement)
+       
+       For technical content:
+       - temperature=0.65 (more consistent)
+       - speed=0.9 (slower for clarity)
+       
+       WHY AI?: Context-aware parameter tuning
+    
+    5. GPU Resource Management:
+       DECISION: "When should I free GPU memory?"
+       
+       After every N chunks (N=10):
+       - Call cleanup_tts_resources
+       - Prevents GPU OOM errors
+       
+       After synthesis errors:
+       - Immediate cleanup before retry
+       - Frees memory for fresh attempt
+       
+       WHY AI?: Predictive resource management
+    
+    CRITICAL IMPLEMENTATION NOTE:
+    ============================
+    The instruction explicitly tells Gemini to:
+    - CALL synthesize_audio for EACH chunk (not describe, actually call!)
+    - MAP voice names to reference_audio files
+    - VERIFY tool responses (check status field)
+    - HANDLE errors gracefully (retry, rewrite, skip)
+    
+    Without this explicit instruction, LLM might:
+    - Describe what it WOULD do instead of doing it
+    - Skip chunks (optimization gone wrong)
+    - Hallucinate file paths
     
     Returns:
-        LlmAgent configured for voice synthesis
+        LlmAgent configured for intelligent TTS synthesis
     """
     return LlmAgent(
         name="VoiceGenerationAgent",
-        model=Gemini(model=settings.gemini_text_model),
+        model=get_model_provider(),  # Auto-selects provider from env (Gemini/Ollama/OpenRouter)
+        tools=[read_json_file, synthesize_audio, cleanup_tts_resources],
         instruction="""
 You are an intelligent voice synthesis agent. You MUST actually synthesize audio files.
 
@@ -137,6 +217,5 @@ Provide a summary of:
 - Failed chunks (if any)
 - TTS provider used (cloud/local)
 - Total audio duration generated
-""",
-        tools=[read_json_file, synthesize_audio, cleanup_tts_resources]
+"""
     )

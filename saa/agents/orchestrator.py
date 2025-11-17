@@ -9,10 +9,10 @@ from typing import Dict, Any, Optional
 import uuid
 
 from google.adk.agents import LlmAgent
-from google.adk.models import Gemini
 from google.adk.runners import InMemoryRunner
 from google.adk.tools import AgentTool
 
+from saa.models import get_model_provider
 from saa.agents.extraction_agent import create_extraction_agent
 from saa.agents.staging_agent import create_staging_agent
 from saa.agents.voice_generation_agent import create_voice_generation_agent
@@ -40,7 +40,46 @@ class AudiobookOrchestrator:
         4. MergeAgent          → Merge and export final audiobook
         5. CleanupAgent        → Clean up temp files
     
-    All stages are coordinated using Google ADK's SequentialAgent pattern.
+    ARCHITECTURE DECISION: AgentTool Coordinator Pattern
+    ====================================================
+    We use a Gemini-powered coordinator that calls sub-agents as tools.
+    
+    Why NOT SequentialAgent?
+    ------------------------
+    Initial implementation used SequentialAgent, which had critical flaws:
+    - ❌ LLM-based routing SKIPPED VoiceGenerationAgent entirely (unpredictable)
+    - ❌ output_key state passing caused hallucinations (LLM invented non-existent keys)
+    - ❌ No explicit file verification between stages
+    - ❌ Poor error handling and debugging
+    
+    Why AgentTool Coordinator?
+    --------------------------
+    Current implementation uses coordinator + file verification:
+    - ✅ Gemini DECIDES when to call each agent (intelligent orchestration)
+    - ✅ File-based coordination (verify_stage_output checks actual files)
+    - ✅ Explicit error handling (report_stage_error for debugging)
+    - ✅ Clear progress communication to user
+    - ✅ No hallucinations (files either exist or don't)
+    
+    Gemini Intelligence:
+    -------------------
+    The coordinator uses Gemini 2.5 Flash to:
+    - Understand pipeline state (which stages completed)
+    - Decide next action based on file verification
+    - Handle errors intelligently (retry, skip, report)
+    - Communicate progress clearly to user
+    
+    WHY AI? (Why Gemini Orchestration Matters):
+    -------------------------------------------
+    Without Gemini coordination, you'd need:
+    - Hardcoded pipeline logic (brittle, no adaptability)
+    - Manual error handling for every edge case
+    - No intelligent recovery from failures
+    
+    With Gemini intelligence:
+    - Adaptive workflow (handles unexpected situations)
+    - Smart error recovery (decides when to retry vs abort)
+    - User-friendly progress reporting
     """
     
     def __init__(
@@ -151,6 +190,9 @@ class AudiobookOrchestrator:
         logger.info("[Orchestrator] Building intelligent agent pipeline...")
         settings = get_settings()
         
+        # Import provider function
+        from saa.models import get_model_provider as _get_provider
+        
         # Create all 5 ADK agents
         extraction_agent = create_extraction_agent()
         staging_agent = create_staging_agent()
@@ -172,7 +214,7 @@ class AudiobookOrchestrator:
         # Create intelligent coordinator
         coordinator = LlmAgent(
             name="PipelineCoordinator",
-            model=Gemini(model=settings.gemini_text_model),
+            model=_get_provider(),  # Auto-selects provider from env (Gemini/Ollama/OpenRouter)
             instruction=f"""
 You are an intelligent audiobook pipeline coordinator. Your job is to orchestrate 5 stages in EXACT ORDER:
 

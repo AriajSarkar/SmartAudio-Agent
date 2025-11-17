@@ -3,8 +3,8 @@ Merge Agent - Stage 4 of audiobook pipeline (ADK LlmAgent)
 Merges audio chunks and converts to final formats
 """
 from google.adk.agents import LlmAgent
-from google.adk.models import Gemini
 
+from saa.models import get_model_provider
 from saa.config import get_settings
 from saa.tools.audio_tools import merge_audio_chunks, normalize_audio, export_audio_format, get_audio_info
 from pathlib import Path
@@ -57,18 +57,101 @@ def create_merge_agent() -> LlmAgent:
     - Exports to final formats (WAV + MP3)
     - Saves to output/<job_id>/
     
-    Gemini Intelligence:
-    - Decides merge strategy (concat vs crossfade)
-    - Chooses normalization levels
-    - Adjusts export quality settings
-    - Handles large file optimization
+    GEMINI INTELLIGENCE - Audio Post-Processing Decisions:
+    =====================================================
+    
+    1. Merge Strategy Selection:
+       DECISION: "How should I combine audio chunks?"
+       
+       Concat (Fast, Lossless):
+       - ✅ Use when: All chunks same sample rate/format
+       - ✅ Perfect for audiobooks (natural flow)
+       - ✅ No quality loss
+       
+       Crossfade (Smooth Transitions):
+       - ✅ Use when: Need seamless blending
+       - ❌ Slower, requires decoding/encoding
+       - ✅ Good for music, less critical for speech
+       
+       WHY AI?: Chooses based on chunk consistency and quality requirements
+    
+    2. Normalization Level Decision:
+       DECISION: "What target volume should I use?"
+       
+       For audiobooks:
+       - Target: -20 dBFS (comfortable listening)
+       - Prevents clipping on loud passages
+       - Consistent volume across chunks
+       
+       For podcasts:
+       - Target: -16 dBFS (louder, competitive)
+       
+       WHY AI?: Understands content type from context
+    
+    3. Export Quality Settings:
+       DECISION: "What MP3 bitrate balances quality vs size?"
+       
+       High Quality (192 kbps):
+       - ✅ Excellent speech clarity
+       - File size: ~1.4 MB per minute
+       - Recommended for premium audiobooks
+       
+       Medium Quality (128 kbps):
+       - ✅ Good balance for most use cases
+       - File size: ~960 KB per minute
+       
+       Low Quality (64 kbps):
+       - ✅ Acceptable for voice-only
+       - File size: ~480 KB per minute
+       - Good for bandwidth-limited scenarios
+       
+       WHY AI?: Adapts to output requirements (file size vs quality trade-off)
+    
+    4. Large File Optimization:
+       DECISION: "How should I handle 10+ hour audiobooks?"
+       
+       Chunk-based merging:
+       - Merge in batches of 50 chunks
+       - Prevents memory overflow
+       - Progress reporting every batch
+       
+       Single-pass merging:
+       - Faster for small audiobooks (<1 hour)
+       - All in memory at once
+       
+       WHY AI?: Predicts memory usage from chunk count
+    
+    5. Quality Verification:
+       DECISION: "Is the merged audio acceptable?"
+       
+       Checks:
+       - File size > 0 (not corrupted)
+       - Duration matches expected (all chunks included)
+       - Sample rate consistent (22050 Hz)
+       - No clipping (peak < 0 dBFS)
+       
+       WHY AI?: Intelligent quality assurance before export
+    
+    CRITICAL PATH AWARENESS:
+    =======================
+    This is the FINAL stage before user gets audiobook.
+    If merge fails:
+    - All previous work (extraction, staging, synthesis) wasted
+    - User has to start over
+    
+    Therefore, Gemini:
+    - VERIFIES input files exist before merging
+    - CHECKS merged file integrity
+    - RETRIES on transient failures
+    - REPORTS detailed errors if unrecoverable
     
     Returns:
-        LlmAgent configured for audio merging
+        LlmAgent configured for intelligent audio post-processing
     """
     return LlmAgent(
         name="MergeAgent",
-        model=Gemini(model=settings.gemini_text_model),
+        model=get_model_provider(),  # Auto-selects provider from env (Gemini/Ollama/OpenRouter)
+        tools=[list_audio_files, merge_audio_chunks, normalize_audio, export_audio_format, get_audio_info],
         instruction="""
 You are an intelligent audio merging agent. You MUST actually merge audio files.
 
@@ -103,6 +186,5 @@ You are an intelligent audio merging agent. You MUST actually merge audio files.
 5. Report: "Merged N chunks into final.wav (X MB) and final.mp3 (Y MB)"
 
 NOTE: The coordinator will provide the job_id. Use it in output paths WITHOUT 'output/' prefix.
-""",
-        tools=[list_audio_files, merge_audio_chunks, normalize_audio, export_audio_format, get_audio_info]
+"""
     )

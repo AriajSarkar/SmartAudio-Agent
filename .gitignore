@@ -20,6 +20,7 @@ output/*
 saa_sessions.db
 *.msgpack
 jobs.db
+sessions_demo.db
 
 # Logs
 logs/

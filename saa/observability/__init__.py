@@ -1,5 +1,4 @@
-"""SAA observability plugins for ADK"""
-# Observability plugins will be implemented when needed
-# For now, use ADK's built-in LoggingPlugin
+"""Observability module for monitoring agent performance"""
+from saa.observability.logging_plugin import SAALoggingPlugin, create_observability_plugin
 
-__all__ = []
+__all__ = ["SAALoggingPlugin", "create_observability_plugin"]
