@@ -29,8 +29,8 @@ Convert PDF and TXT documents into audiobooks with character voice cloning using
 
 ```powershell
 # Clone repository
-git clone https://github.com/AriajSarkar/saa.git
-cd saa
+git clone https://github.com/AriajSarkar/SmartAudio-Agent.git
+cd SmartAudio-Agent
 
 # Create virtual environment
 python -m venv .venv
@@ -85,12 +85,12 @@ asyncio.run(main())
 
 ## 🏗️ Architecture
 
-SAA uses a **Custom Agent** inheriting from `BaseAgent` with deterministic 5-stage execution:
+SAA uses **Google ADK's AgentTool Coordinator pattern** for intelligent, file-based audiobook generation:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│          CUSTOM AGENT (AudiobookPipelineAgent)              │
-│              Deterministic Pipeline Execution                │
+│          PIPELINE COORDINATOR (Gemini-Powered)              │
+│        Calls Stage Agents as Tools + Verifies Files         │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  1. DocumentExtractor     → Extract + understand structure   │
@@ -121,18 +121,18 @@ Philosophy:
 - Agents = Orchestrators (combine intelligence + tools)
 ```
 
-### Why Custom Agent?
+### Why AgentTool Coordinator?
 
-**Deterministic Execution:**
-- ✅ GUARANTEED no step skipping (Python control flow)
-- ✅ Explicit retry logic for TTS failures  
-- ✅ State validation between stages
-- ✅ No wasted LLM calls for routing decisions
+**Gemini-Powered Intelligence:**
+- ✅ Coordinator uses Gemini to orchestrate workflow
+- ✅ File-based verification between stages (no hallucinations)
+- ✅ Explicit error handling with retry logic
+- ✅ Clear progress communication to user
 
-**vs. SequentialAgent:**
-- ❌ LLM-based routing can skip steps
-- ❌ Non-deterministic execution order
-- ❌ Extra tokens spent on orchestration
+**vs. SequentialAgent (initial approach):**
+- ❌ LLM-based routing skipped synthesis stage entirely
+- ❌ output_key state passing caused hallucinations
+- ❌ No explicit file verification
 
 ### Agent Tools (15 Functions)
 
@@ -196,7 +196,7 @@ NORMALIZE_AUDIO=true
 CROSSFADE_DURATION=100
 
 # System
-MAX_SEGMENT_LENGTH=800  # chars per TTS call
+MAX_SEGMENT_LENGTH=250  # chars per TTS call (prevents truncation warnings)
 SESSION_DB_PATH=./sessions.db
 ```
 
@@ -208,7 +208,7 @@ SESSION_DB_PATH=./sessions.db
 SAA/
 ├── saa/                        # Main package
 │   ├── agents/                 # ADK agents
-│   │   └── orchestrator.py     # SequentialAgent pipeline
+│   │   └── orchestrator.py     # AgentTool coordinator pipeline
 │   ├── tools/                  # 17 ADK function tools
 │   │   ├── document_tools.py   # PDF/TXT extraction
 │   │   ├── text_tools.py       # Cleaning & segmentation

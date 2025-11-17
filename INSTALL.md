@@ -67,7 +67,7 @@ Expected output:
 │ Replicate Available: true (or false)      │
 │ Gemini Model: gemini-2.5-flash-lite       │
 │ GPU Enabled: true                         │
-│ Max Segment Length: 800                   │
+│ Max Segment Length: 250                   │
 │ Output Format: mp3                        │
 │ Session DB: ./sessions.db                 │
 └───────────────────────────────────────────┘

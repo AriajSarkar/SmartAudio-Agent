@@ -4,8 +4,8 @@ Immutable constants for SAA system
 from typing import Final
 
 # TTS Model Limits
-MAX_SEGMENT_LENGTH: Final[int] = 800  # Characters per TTS segment (XTTS-v2 limit)
-SAFE_SEGMENT_LENGTH: Final[int] = 750  # Safe threshold with margin
+MAX_SEGMENT_LENGTH: Final[int] = 250  # Characters per TTS segment (actual XTTS-v2 limit for quality)
+SAFE_SEGMENT_LENGTH: Final[int] = 200  # Safe threshold with margin (prevents truncation warnings)
 MIN_SEGMENT_LENGTH: Final[int] = 50  # Minimum viable segment
 
 # Supported File Formats
