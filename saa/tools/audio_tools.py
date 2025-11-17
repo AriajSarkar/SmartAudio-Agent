@@ -1,17 +1,48 @@
-"""
+"""                                                               
 Audio processing tools (ADK function tools)
 Merge, normalize, and export audio files with ffmpeg support
 """
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+import warnings
+
+# Suppress pydub FFmpeg warning - we handle detection below
+warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv")
+
 from pydub import AudioSegment
 from pydub.utils import which
 import subprocess
 import tempfile
+import os
+import sys
 
 from saa.exceptions import AudioProcessingError, AudioMergeError
 
+# Auto-configure ffmpeg path for pydub
+def _configure_ffmpeg():
+    """Configure ffmpeg path: system PATH → imageio-ffmpeg (bundled)"""
+    try:
+        # Try system PATH first
+        ffmpeg_path = which("ffmpeg")
+        if ffmpeg_path:
+            AudioSegment.converter = ffmpeg_path
+            return
+        
+        # Fallback: Use imageio-ffmpeg bundled binaries
+        try:
+            import imageio_ffmpeg
+            bundled_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+            if bundled_ffmpeg and Path(bundled_ffmpeg).exists():
+                AudioSegment.converter = bundled_ffmpeg
+                print(f"[audio_tools] Using bundled FFmpeg: {bundled_ffmpeg}")
+                return
+        except ImportError:
+            pass  # imageio-ffmpeg not installed
+        
+    except Exception:
+        pass  # Use pydub defaults
 
+_configure_ffmpeg()
 def merge_audio_chunks(
     audio_files: List[str],
     output_path: str,
@@ -45,6 +76,10 @@ def merge_audio_chunks(
         if not audio_files:
             raise AudioMergeError("No audio files to merge")
         
+        # Convert crossfade_ms to int if it's a string
+        if isinstance(crossfade_ms, str):
+            crossfade_ms = int(crossfade_ms) if crossfade_ms else 0
+        
         # Verify all files exist
         missing = [f for f in audio_files if not Path(f).exists()]
         if missing:
@@ -53,7 +88,12 @@ def merge_audio_chunks(
         # Ensure output directory exists
         output_path_obj = Path(output_path)
         if not output_path_obj.is_absolute():
-            output_path_obj = Path.cwd() / "output" / output_path_obj.name
+            # Preserve relative path structure (e.g., job_348ffe09/final.wav)
+            # Check if path already starts with 'output' to avoid double nesting
+            if not str(output_path).startswith("output"):
+                output_path_obj = Path.cwd() / "output" / output_path
+            else:
+                output_path_obj = Path.cwd() / output_path
         
         output_path_obj.parent.mkdir(parents=True, exist_ok=True)
         
@@ -61,7 +101,15 @@ def merge_audio_chunks(
         
         # Try ffmpeg concat first (faster, lossless)
         if use_ffmpeg and crossfade_ms == 0:
+            # Try to find ffmpeg: system PATH or imageio-ffmpeg bundled
             ffmpeg_path = which("ffmpeg")
+            if not ffmpeg_path:
+                try:
+                    import imageio_ffmpeg
+                    ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+                except ImportError:
+                    pass
+            
             if ffmpeg_path:
                 try:
                     # Create temporary file list for ffmpeg concat
@@ -231,7 +279,8 @@ def export_audio_format(
     input_file: str,
     output_file: str,
     format: str = "mp3",
-    quality: str = "high"
+    quality: str = "high",
+    cleanup_input: bool = True
 ) -> Dict[str, Any]:
     """
     Export audio to different format with quality settings.
@@ -244,6 +293,7 @@ def export_audio_format(
         output_file: Path for output file
         format: Output format (mp3/wav/ogg/flac)
         quality: Quality preset (low/medium/high)
+        cleanup_input: Delete input file after conversion (if same base name)
     
     Returns:
         Dictionary with:
@@ -259,15 +309,34 @@ def export_audio_format(
         
         # Ensure paths are in output directory
         if not input_path.is_absolute():
-            input_path = Path.cwd() / "output" / input_path.name
+            # Preserve relative path structure, avoid double output/ nesting
+            if not str(input_file).startswith("output"):
+                input_path = Path.cwd() / "output" / input_file
+            else:
+                input_path = Path.cwd() / input_file
         if not output_path.is_absolute():
-            output_path = Path.cwd() / "output" / output_path.name
+            # Preserve relative path structure, avoid double output/ nesting
+            if not str(output_file).startswith("output"):
+                output_path = Path.cwd() / "output" / output_file
+            else:
+                output_path = Path.cwd() / output_file
         
         if not input_path.exists():
             raise AudioProcessingError(f"Input file not found: {input_file}")
         
         # Ensure output directory exists
         output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Ensure FFmpeg is configured (system or bundled)
+        ffmpeg_path = which("ffmpeg")
+        if not ffmpeg_path:
+            try:
+                import imageio_ffmpeg
+                ffmpeg_path = imageio_ffmpeg.get_ffmpeg_exe()
+                if ffmpeg_path:
+                    AudioSegment.converter = ffmpeg_path
+            except ImportError:
+                pass
         
         # Load audio
         audio = AudioSegment.from_file(str(input_path))
@@ -276,12 +345,11 @@ def export_audio_format(
         export_params = {"format": format}
         
         if format == "mp3":
-            # Check for FFmpeg
-            if not which("ffmpeg"):
+            # Verify FFmpeg is available
+            if not ffmpeg_path:
                 return {
                     "status": "error",
-                    "error": "FFmpeg not found. Required for MP3 export. "
-                            "Download from https://ffmpeg.org/"
+                    "error": "FFmpeg not found. Install with: pip install imageio-ffmpeg"
                 }
             
             quality_map = {
@@ -308,7 +376,7 @@ def export_audio_format(
         # Clean up intermediate WAV file after conversion to final format
         # Delete WAV file if we're converting to a different format (MP3, OGG, etc.)
         # and the WAV has the same base name as output (e.g., sample.wav → sample.mp3)
-        if format != "wav" and input_path.suffix == ".wav":
+        if cleanup_input and format != "wav" and input_path.suffix == ".wav":
             try:
                 # Check if it's an intermediate file by comparing base names
                 input_base = input_path.stem  # e.g., "sample" from "sample.wav"
