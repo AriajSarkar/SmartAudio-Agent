@@ -39,6 +39,8 @@ notepad .env
 
 **Optional:**
 - `REPLICATE_API_TOKEN` - Get from https://replicate.com/account/api-tokens
+- `REPLICATE_MODEL` - Replicate TTS model (default: lucataco/xtts-v2)
+- `REPLICATE_MODEL_VERSION` - Model version hash (default provided)
 
 ---
 
