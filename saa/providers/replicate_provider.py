@@ -28,22 +28,22 @@ class ReplicateTTSProvider:
     """
     
     # Default Replicate model for TTS (can be overridden)
-    DEFAULT_MODEL = "afiaka87/tortoise-tts"
-    DEFAULT_VERSION = "e9658de4b325863c4fcdc12d94bb7c9b54cbfe351b7ca1b36860008172b91c71"
+    DEFAULT_MODEL = "lucataco/xtts-v2"
+    DEFAULT_VERSION = "684bc3855b37866c0c65add2ff39c78f3dea3f4ff103a436465326e0f438d55e"
     
     def __init__(
         self,
         api_token: Optional[str] = None,
-        model: str = DEFAULT_MODEL,
-        version: str = DEFAULT_VERSION
+        model: Optional[str] = None,
+        version: Optional[str] = None
     ):
         """
         Initialize Replicate TTS provider
         
         Args:
             api_token: Replicate API token (or from REPLICATE_API_TOKEN env var)
-            model: Replicate model name
-            version: Model version hash
+            model: Replicate model name (or from REPLICATE_MODEL env var)
+            version: Model version hash (or from REPLICATE_MODEL_VERSION env var)
         """
         if not REPLICATE_AVAILABLE:
             raise ImportError(
@@ -56,11 +56,12 @@ class ReplicateTTSProvider:
         if not self.api_token or self.api_token == "your_replicate_token_here":
             raise ReplicateAuthError()
         
-        self.model = model
-        self.version = version
+        # Allow configuration via environment variables
+        self.model = model or os.getenv("REPLICATE_MODEL", self.DEFAULT_MODEL)
+        self.version = version or os.getenv("REPLICATE_MODEL_VERSION", self.DEFAULT_VERSION)
         self.client = None
         
-        logger.info(f"ReplicateTTSProvider initialized with model: {model}")
+        logger.info(f"ReplicateTTSProvider initialized with model: {self.model}")
     
     def _get_client(self):
         """Get or create Replicate client"""

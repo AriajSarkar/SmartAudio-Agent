@@ -5,7 +5,7 @@ Clean, normalize, and segment text for TTS processing
 import re
 from pathlib import Path
 from typing import Dict, Any, List
-from saa.models import TextSegment
+from saa.models import TextSegment, get_model_provider
 from saa.constants import MAX_SEGMENT_LENGTH, SAFE_SEGMENT_LENGTH
 
 
@@ -380,5 +380,116 @@ def filter_unwanted_content(text: str, book_title: str = "") -> Dict[str, Any]:
             "status": "error",
             "filtered_text": text,
             "removed_sections": [],
+            "error": str(e)
+        }
+
+
+def refine_text_for_tts(text: str) -> Dict[str, Any]:
+    """
+    Refine text to remove TTS-problematic content using LLM.
+    
+    Uses an agentic approach to intelligently clean text for speech synthesis:
+    - Removes decorative elements (dashes like "-------", asterisks, formatting)
+    - Normalizes problematic characters and OCR artifacts
+    - Fixes awkward sentence structures
+    - Preserves meaning while optimizing for natural speech
+    
+    This function processes text in small context windows to ensure quality
+    refinement without changing the core meaning.
+    
+    Args:
+        text: Text chunk to refine (typically 200-250 chars)
+    
+    Returns:
+        Dictionary with:
+            - status: "success" or "error"
+            - refined_text: Cleaned text optimized for TTS
+            - original_text: Input text for comparison
+            - changes_made: List of refinement operations performed
+            - char_count_before: Original character count
+            - char_count_after: Refined character count
+            - error: Error message if failed
+    """
+    try:
+        # Import here to avoid circular dependency
+        from google.generativeai import GenerativeModel
+        import google.generativeai as genai
+        from saa.config import get_settings
+        
+        settings = get_settings()
+        
+        # Configure the model
+        genai.configure(api_key=settings.google_api_key)
+        model = GenerativeModel('gemini-2.0-flash-exp')
+        
+        # Agentic prompt for text refinement
+        prompt = f"""You are a text refinement expert for text-to-speech (TTS) systems.
+
+Your task: Refine the following text to make it TTS-friendly while preserving ALL meaning.
+
+INPUT TEXT:
+\"\"\"{text}\"\"\"
+
+REFINEMENT RULES:
+1. Remove decorative elements:
+   - Dashes used as separators (e.g., "-------", "---")
+   - Asterisks used for formatting (e.g., "***", "* * *")
+   - Equals signs as dividers (e.g., "=======")
+
+2. Fix TTS-problematic patterns:
+   - Convert symbols to words when needed (e.g., "$19.99" → "nineteen ninety-nine dollars")
+   - Remove or normalize special formatting characters
+   - Fix awkward line breaks mid-sentence
+
+3. PRESERVE completely:
+   - All actual content and meaning
+   - Proper nouns and names
+   - Dialogue and quotes
+   - Sentence structure (unless awkward)
+
+4. Output ONLY the refined text, nothing else.
+5. If the text is already clean, return it unchanged.
+6. Do NOT add explanations or commentary.
+
+REFINED TEXT:"""
+
+        # Call LLM for refinement
+        response = model.generate_content(prompt)
+        refined_text = response.text.strip()
+        
+        # Detect changes made
+        changes_made = []
+        if "---" in text and "---" not in refined_text:
+            changes_made.append("removed_decorative_dashes")
+        if "***" in text and "***" not in refined_text:
+            changes_made.append("removed_asterisks")
+        if "===" in text and "===" not in refined_text:
+            changes_made.append("removed_equals_dividers")
+        if len(refined_text) != len(text):
+            changes_made.append("normalized_length")
+        if not changes_made:
+            changes_made.append("no_changes_needed")
+        
+        return {
+            "status": "success",
+            "refined_text": refined_text,
+            "original_text": text,
+            "changes_made": changes_made,
+            "char_count_before": len(text),
+            "char_count_after": len(refined_text),
+            "summary": f"Refined text: {len(changes_made)} operations, {len(text)} → {len(refined_text)} chars",
+            "error": None
+        }
+    
+    except Exception as e:
+        # Fallback: return original text if refinement fails
+        return {
+            "status": "error",
+            "refined_text": text,  # Return original on error
+            "original_text": text,
+            "changes_made": [],
+            "char_count_before": len(text),
+            "char_count_after": len(text),
+            "summary": f"Refinement failed, using original text: {str(e)}",
             "error": str(e)
         }

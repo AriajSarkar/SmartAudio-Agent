@@ -15,6 +15,7 @@ from google.adk.tools import AgentTool
 from saa.models import get_model_provider
 from saa.agents.extraction_agent import create_extraction_agent
 from saa.agents.staging_agent import create_staging_agent
+from saa.agents.refinement_agent import create_refinement_agent
 from saa.agents.voice_generation_agent import create_voice_generation_agent
 from saa.agents.merge_agent import create_merge_agent
 from saa.agents.cleanup_agent import create_cleanup_agent
@@ -34,11 +35,12 @@ class AudiobookOrchestrator:
     Orchestrates the 5-stage audiobook generation pipeline using ADK agents.
     
     Pipeline Flow:
-        1. ExtractionAgent     → Extract text from PDF/TXT
-        2. StagingAgent        → Clean, chunk, add voice metadata
+        1. ExtractionAgent      → Extract text from PDF/TXT
+        2. StagingAgent         → Clean, chunk, add voice metadata
+        2.5 TextRefinementAgent → Refine chunks (remove dashes, artifacts)
         3. VoiceGenerationAgent → Synthesize audio chunks
-        4. MergeAgent          → Merge and export final audiobook
-        5. CleanupAgent        → Clean up temp files
+        4. MergeAgent           → Merge and export final audiobook
+        5. CleanupAgent         → Clean up temp files
     
     ARCHITECTURE DECISION: AgentTool Coordinator Pattern
     ====================================================
@@ -193,9 +195,10 @@ class AudiobookOrchestrator:
         # Import provider function
         from saa.models import get_model_provider as _get_provider
         
-        # Create all 5 ADK agents
+        # Create all agents (now 6 stages)
         extraction_agent = create_extraction_agent()
         staging_agent = create_staging_agent()
+        refinement_agent = create_refinement_agent()  # NEW: Stage 2.5
         voice_generation_agent = create_voice_generation_agent()
         merge_agent = create_merge_agent()
         cleanup_agent = create_cleanup_agent()
@@ -203,6 +206,7 @@ class AudiobookOrchestrator:
         # Wrap agents as callable tools
         extraction_tool = AgentTool(extraction_agent)
         staging_tool = AgentTool(staging_agent)
+        refinement_tool = AgentTool(refinement_agent)  # NEW: Stage 2.5
         voice_tool = AgentTool(voice_generation_agent)
         merge_tool = AgentTool(merge_agent)
         cleanup_tool = AgentTool(cleanup_agent)
@@ -228,7 +232,13 @@ You are an intelligent audiobook pipeline coordinator. Your job is to orchestrat
 2. Call StagingAgent
    - The agent will create chunks and save to output/.temp/staged/chunks.json
    - After agent completes, call verify_stage_output("StagingAgent", "output/.temp/staged/chunks.json")
-   - If file exists: Say "OK - Stage 2 complete. Proceeding to synthesis..."
+   - If file exists: Say "OK - Stage 2 complete. Proceeding to refinement..."
+   - If file missing: Call report_stage_error with details
+
+2.5 Call TextRefinementAgent
+   - The agent will refine text chunks (remove dashes, artifacts) in chunks.json
+   - After agent completes, call verify_stage_output("TextRefinementAgent", "output/.temp/staged/chunks.json")
+   - If file exists: Say "OK - Stage 2.5 complete. Text refined. Proceeding to synthesis..."
    - If file missing: Call report_stage_error with details
 
 3. Call VoiceGenerationAgent
@@ -266,6 +276,7 @@ Output: {self.job_output_dir}
             tools=[
                 extraction_tool,
                 staging_tool,
+                refinement_tool,  # NEW: Stage 2.5
                 voice_tool,
                 merge_tool,
                 cleanup_tool,
