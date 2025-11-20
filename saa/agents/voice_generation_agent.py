@@ -7,49 +7,12 @@ from google.adk.agents import LlmAgent
 from saa.models import get_model_provider
 from saa.config import get_settings
 from saa.tools.tts_tools import synthesize_audio, cleanup_tts_resources
+from saa.tools.file_tools import read_json_file
 import json
 from pathlib import Path
 from typing import Dict, Any
 
 settings = get_settings()
-
-
-def read_json_file(file_path: str) -> Dict[str, Any]:
-    """
-    Read and parse a JSON file.
-    
-    Args:
-        file_path: Path to JSON file to read
-        
-    Returns:
-        Dictionary with status and parsed JSON data
-    """
-    try:
-        path = Path(file_path)
-        if not path.exists():
-            return {
-                "status": "error",
-                "error": f"File not found: {file_path}"
-            }
-        
-        with open(path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        return {
-            "status": "success",
-            "data": data,
-            "file_path": str(path.absolute())
-        }
-    except json.JSONDecodeError as e:
-        return {
-            "status": "error",
-            "error": f"Invalid JSON: {str(e)}"
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e)
-        }
 
 
 def create_voice_generation_agent() -> LlmAgent:
@@ -165,8 +128,9 @@ You are an intelligent voice synthesis agent. You MUST actually synthesize audio
 4. After all chunks, call cleanup_tts_resources
 
 ## Tools Available:
-1. **synthesize_audio** - Generate audio (YOU MUST CALL THIS for each chunk!)
-2. **cleanup_tts_resources** - Free GPU memory after synthesis
+1. **read_json_file** - Read chunks.json file
+2. **synthesize_audio** - Generate audio (YOU MUST CALL THIS for each chunk!)
+3. **cleanup_tts_resources** - Free GPU memory after synthesis
 
 ## Voice to Reference Audio Mapping:
 Map chunk voice names to reference audio files:
@@ -183,19 +147,19 @@ Map chunk voice names to reference audio files:
 3. For each chunk in the array:
    a. Extract: chunk["id"], chunk["text"], chunk["voice"], chunk["speed"]
    b. Map voice name to reference_audio path (see mapping above)
-   c. **CALL synthesize_audio tool** with these parameters:
-      - text=chunk["text"]
-      - output_path=f"voices/chunk_{chunk['id']:04d}.wav"  # Will be saved to output/.temp/voices/
+   c. **CALL synthesize_audio tool**:
+      - text=chunk["text"]  # Text already refined by TextRefinementAgent!
+      - output_path=f"chunk_{chunk['id']:04d}.wav"  # Just filename
       - reference_audio="reference_audio/male.wav" (or appropriate mapping)
       - voice=chunk["voice"]
       - speed=chunk["speed"]
-      - use_temp_dir=True  # CRITICAL: Ensures file goes to temp directory
+      - use_temp_dir=True  # Saves to output/.temp/voices/
    d. Check tool response for success/error
 4. After processing ALL chunks, call cleanup_tts_resources
 5. Report: "Synthesized N audio chunks successfully"
 
 ## Example Tool Call:
-```
+```python
 synthesize_audio(
   text="The sun rose over the horizon...",
   output_path="chunk_0000.wav",

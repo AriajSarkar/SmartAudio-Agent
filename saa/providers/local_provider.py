@@ -7,9 +7,10 @@ from TTS.api import TTS
 from pathlib import Path
 from typing import Optional, Dict, Any
 import logging
+import random
 
 from saa.exceptions import LocalTTSError, VoiceReferenceError, GPUOutOfMemoryError
-from saa.constants import MAX_SEGMENT_LENGTH
+from saa.constants import MAX_SEGMENT_LENGTH, TTS_BASE_TEMPERATURE, TTS_BASE_REPETITION_PENALTY, TTS_SPEED_VARIANCE
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +69,8 @@ class LocalTTSProvider:
         output_path: str,
         reference_audio: str,
         language: str = "en",
-        temperature: float = 0.75,
-        repetition_penalty: float = 7.0,
+        temperature: float = None,
+        repetition_penalty: float = None,
         speed: float = 1.0
     ) -> Dict[str, Any]:
         """
@@ -125,8 +126,18 @@ class LocalTTSProvider:
                     # Try cleanup
                     torch.cuda.empty_cache()
             
+            # Use optimized parameters for human-like audio in short segments
+            if temperature is None:
+                temperature = TTS_BASE_TEMPERATURE  # 0.85 for expressiveness
+            if repetition_penalty is None:
+                repetition_penalty = TTS_BASE_REPETITION_PENALTY  # 10.0 to prevent loops
+            
+            # Add slight speed variance for naturalness (prevent monotone)
+            speed_adjusted = speed + random.uniform(-TTS_SPEED_VARIANCE, TTS_SPEED_VARIANCE)
+            speed_adjusted = max(0.5, min(2.0, speed_adjusted))  # Clamp to valid range
+            
             # Generate speech
-            logger.debug(f"Synthesizing {len(text)} chars with {ref_path.name}")
+            logger.debug(f"Synthesizing {len(text)} chars with {ref_path.name} (temp={temperature}, rep_pen={repetition_penalty}, speed={speed_adjusted:.2f})")
             
             try:
                 self.model.tts_to_file(
@@ -136,7 +147,7 @@ class LocalTTSProvider:
                     language=language,
                     temperature=temperature,
                     repetition_penalty=repetition_penalty,
-                    speed=speed
+                    speed=speed_adjusted
                 )
             except RuntimeError as e:
                 if "out of memory" in str(e).lower():

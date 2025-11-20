@@ -17,6 +17,12 @@ DEFAULT_SAMPLE_RATE: Final[int] = 24000  # Hz (XTTS-v2 output)
 DEFAULT_CHANNELS: Final[int] = 1  # Mono
 CROSSFADE_DURATION: Final[int] = 100  # Milliseconds
 
+# TTS Quality Settings for Human-Like Audio (optimized for short segments)
+TTS_BASE_TEMPERATURE: Final[float] = 0.85  # Higher for expressiveness in short segments
+TTS_BASE_REPETITION_PENALTY: Final[float] = 10.0  # Prevent word repetition
+TTS_SPEED_VARIANCE: Final[float] = 0.05  # Subtle speed variation for naturalness
+TTS_ENABLE_PROSODY_ENHANCEMENT: Final[bool] = True  # Enable enhanced intonation
+
 # Voice Reference Requirements
 MIN_REFERENCE_DURATION: Final[float] = 6.0  # Seconds
 MAX_REFERENCE_DURATION: Final[float] = 15.0  # Seconds
