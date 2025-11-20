@@ -6,7 +6,6 @@
 .idea/
 *.code-workspace
 test-voices/*
-samples/*
 reference_audio/*
 input/*
 pre-input/*
