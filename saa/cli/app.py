@@ -177,11 +177,83 @@ def resume(ctx, session_id):
     Example:
         saa resume session-12345
     """
+    verbose = ctx.obj.get('verbose', False)
     console.print(f"[cyan]Resuming session: {session_id}[/cyan]")
     
-    # TODO: Implement session resume logic
-    console.print("[yellow]⚠️  Resume not yet implemented[/yellow]")
-    console.print("[dim]Coming soon: Checkpoint-based resume capability[/dim]")
+    # Check if session exists
+    output_dir = Path("./output")
+    session_dir = output_dir / session_id
+    state_path = session_dir / "state.json"
+    
+    if not session_dir.exists() or not state_path.exists():
+        console.print(f"[red]❌ Session not found: {session_id}[/red]")
+        console.print(f"Expected checkpoint at: {state_path}")
+        sys.exit(1)
+        
+    # Load state to get input file
+    try:
+        from saa.models import JobState
+        state = JobState.load(state_path)
+        input_file = state.input_file
+        console.print(f"📄 Input file: {input_file}")
+        console.print(f"🔄 Last stage: {state.stage.value}")
+    except Exception as e:
+        console.print(f"[red]❌ Failed to load checkpoint: {e}[/red]")
+        sys.exit(1)
+
+    # Run pipeline
+    try:
+        # Import new orchestrator
+        from saa.agents.orchestrator import AudiobookOrchestrator
+        
+        console.print("\n[cyan]🚀 Resuming 5-stage ADK pipeline...[/cyan]")
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TimeElapsedColumn(),
+            console=console
+        ) as progress:
+            
+            task = progress.add_task(f"[cyan]Resuming audiobook (Stage: {state.stage.value})...", total=None)
+            
+            # Create orchestrator with existing job_id
+            orchestrator = AudiobookOrchestrator(
+                input_file=input_file,
+                output_dir=output_dir,
+                job_id=session_id
+            )
+            
+            # Run pipeline
+            async def run():
+                return await orchestrator.run_async()
+            
+            result = asyncio.run(run())
+            progress.update(task, completed=True)
+        
+        # Check result
+        if result["status"] == "success":
+            console.print(f"\n✅ [bold green]Audiobook generated successfully![/bold green]")
+            console.print(f"📁 Output directory: [cyan]{result['output_dir']}[/cyan]")
+            console.print(f"🎵 Generated files:")
+            for file in result.get("output_files", []):
+                console.print(f"   • {Path(file).name}")
+        else:
+            console.print(f"\n[red]❌ Generation failed: {result.get('error')}[/red]")
+            sys.exit(1)
+        
+        # Suppress aiohttp shutdown errors
+        sys.stderr = open(os.devnull, 'w')
+    
+    except KeyboardInterrupt:
+        console.print("\n[yellow]⚠️  Generation cancelled by user[/yellow]")
+        sys.exit(130)
+    except Exception as e:
+        console.print(f"\n[red]❌ Fatal error: {e}[/red]")
+        if verbose:
+            console.print_exception()
+        sys.exit(1)
 
 
 @cli.command()
@@ -195,9 +267,55 @@ def list_sessions(ctx):
     """
     console.print("[cyan]Listing saved sessions...[/cyan]")
     
-    # TODO: Query session database
-    console.print("[yellow]⚠️  Session listing not yet implemented[/yellow]")
-    console.print("[dim]Coming soon: View all checkpointed sessions[/dim]")
+    from rich.table import Table
+    from saa.models import JobState
+    
+    table = Table(title="📚 Saved Sessions")
+    table.add_column("Session ID", style="cyan", no_wrap=True)
+    table.add_column("Input File", style="magenta")
+    table.add_column("Stage", style="green")
+    table.add_column("Progress", justify="right")
+    table.add_column("Last Updated", style="dim")
+    
+    output_dir = Path("./output")
+    if not output_dir.exists():
+        console.print("[yellow]No sessions found (output directory missing)[/yellow]")
+        return
+
+    found_sessions = False
+    
+    # Scan for sessions
+    for session_dir in sorted(output_dir.iterdir(), key=os.path.getmtime, reverse=True):
+        if not session_dir.is_dir():
+            continue
+            
+        state_path = session_dir / "state.json"
+        if state_path.exists():
+            try:
+                state = JobState.load(state_path)
+                found_sessions = True
+                
+                # Format progress
+                progress = f"{state.progress_percentage:.0f}%"
+                if state.is_completed:
+                    progress = "[bold green]DONE[/bold green]"
+                elif state.is_failed:
+                    progress = "[bold red]FAILED[/bold red]"
+                
+                table.add_row(
+                    state.job_id,
+                    state.input_file.name,
+                    state.stage.value,
+                    progress,
+                    state.updated_at.strftime("%Y-%m-%d %H:%M")
+                )
+            except Exception:
+                continue
+    
+    if found_sessions:
+        console.print(table)
+    else:
+        console.print("[yellow]No saved sessions found.[/yellow]")
 
 
 @cli.command()
