@@ -14,6 +14,7 @@
 - [x] CLI interface (Click + Rich)
 - [x] Character voice detection
 - [x] Audio merging and normalization
+- [x] Text Refinement Agent (Stage 2.5)
 - [x] Comprehensive documentation
 
 ### 🔄 In Progress

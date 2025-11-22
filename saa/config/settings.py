@@ -163,7 +163,7 @@ class Settings(BaseSettings):
     
     # Text Processing
     max_segment_length: int = Field(
-        default=800,
+        default=250,
         ge=100,
         le=1000,
         description="Maximum segment length"

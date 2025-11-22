@@ -33,7 +33,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Install PyTorch with CUDA
-pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Install SAA in editable mode with dev dependencies
 pip install -e ".[dev]"

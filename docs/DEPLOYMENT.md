@@ -120,7 +120,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Install PyTorch with CPU (Cloud Run doesn't have GPU)
-RUN pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
 # Copy requirements and install
 COPY requirements.txt .

@@ -152,6 +152,29 @@ verify_stage_output("StagingAgent", "output/.temp/staged/chunks.json")
 
 ---
 
+### Stage 2.5: RefinementAgent
+**File**: `saa/agents/refinement_agent.py`
+**Tools**: `read_json_file`, `refine_text_chunks`, `save_json_file`
+
+**Gemini Intelligence**:
+- Identifies and removes decorative dashes, artifacts, and non-spoken text
+- Preserves meaningful content while cleaning garbage
+- Ensures text is optimized for TTS pronunciation
+
+**Workflow**:
+1. Read `output/.temp/staged/chunks.json`
+2. Refine text content of each chunk
+3. Update `chunks.json` with refined text
+
+**File Output**: `output/.temp/staged/chunks.json` (Updated)
+
+**Coordinator Verification**:
+```python
+verify_stage_output("RefinementAgent", "output/.temp/staged/chunks.json")
+```
+
+---
+
 ### Stage 3: VoiceGenerationAgent
 **File**: `saa/agents/voice_generation_agent.py`  
 **Tools**: `read_json_file`, `synthesize_audio`, `cleanup_tts_resources`
