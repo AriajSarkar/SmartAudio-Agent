@@ -61,8 +61,8 @@ class TestAudiobookPipeline:
             output_dir=temp_dir
         )
         result = await orchestrator.run_async()
+        print(
             f"Generate audiobook from: {str(sample_txt_path)}"
-        )
         )
         
         assert result["status"] == "success"
