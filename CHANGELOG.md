@@ -13,6 +13,7 @@ Complete architectural redesign from monolithic scripts to multi-agent system.
 
 ### Added
 - **Google ADK Integration**: Full multi-agent orchestration with AgentTool Coordinator
+- **RefinementAgent**: New stage (2.5) for text cleaning and artifact removal
 - **17 ADK Function Tools**: Modular tools for document, text, voice, TTS, and audio processing
 - **Replicate Cloud TTS**: Cloud-based synthesis with automatic fallback
 - **LocalTTSProvider**: GPU-optimized Coqui XTTS-v2 wrapper with memory management

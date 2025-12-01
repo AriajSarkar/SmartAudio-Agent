@@ -6,8 +6,7 @@ from google.adk.agents import LlmAgent
 
 from saa.models import get_model_provider
 from saa.config import get_settings
-from saa.tools.tts_tools import synthesize_audio, cleanup_tts_resources
-from saa.tools.file_tools import read_json_file
+from saa.tools.resume_tools import synthesize_remaining_chunks
 import json
 from pathlib import Path
 from typing import Dict, Any
@@ -15,7 +14,7 @@ from typing import Dict, Any
 settings = get_settings()
 
 
-def create_voice_generation_agent() -> LlmAgent:
+def create_voice_generation_agent(job_state_path: str = None) -> LlmAgent:
     """
     Create ADK-based Voice Generation Agent.
     
@@ -24,6 +23,9 @@ def create_voice_generation_agent() -> LlmAgent:
     - Synthesizes audio for each chunk
     - Handles Replicate/local TTS fallback
     - Saves to .temp/voices/chunk_<id>.wav
+    
+    Args:
+        job_state_path: Optional path to JobState JSON for checkpoint tracking
     
     GEMINI INTELLIGENCE - TTS Orchestration Decisions:
     =================================================
@@ -114,72 +116,61 @@ def create_voice_generation_agent() -> LlmAgent:
     Returns:
         LlmAgent configured for intelligent TTS synthesis
     """
-    return LlmAgent(
-        name="VoiceGenerationAgent",
-        model=get_model_provider(),  # Auto-selects provider from env (Gemini/Ollama/OpenRouter)
-        tools=[read_json_file, synthesize_audio, cleanup_tts_resources],
-        instruction="""
-You are an intelligent voice synthesis agent. You MUST actually synthesize audio files.
+    
+    # Include checkpoint instruction if state path provided
+    checkpoint_instruction = ""
+    if job_state_path:
+        checkpoint_instruction = f"""
 
-## CRITICAL - Your Required Actions:
-1. Read chunks.json from: output/.temp/staged/chunks.json
-2. For EACH chunk in the JSON array, call synthesize_audio tool
-3. Save audio files to output/.temp/voices/chunk_XXXX.wav
-4. After all chunks, call cleanup_tts_resources
+## CHECKPOINT TRACKING (RESUME SUPPORT):
+**State Path**: {job_state_path}
 
-## Tools Available:
-1. **read_json_file** - Read chunks.json file
-2. **synthesize_audio** - Generate audio (YOU MUST CALL THIS for each chunk!)
-3. **cleanup_tts_resources** - Free GPU memory after synthesis
+When calling synthesize_audio, you MUST include these parameters for checkpoint tracking:
+- chunk_id={"{"}chunk["id"]{"}"}  # The chunk ID number from chunks.json
+- job_state_path="{job_state_path}"  # Path to state file
 
-## Voice to Reference Audio Mapping:
-Map chunk voice names to reference audio files:
-- "neutral" → "reference_audio/male.wav"  
-- "male" → "reference_audio/male.wav"
-- "female" → "reference_audio/female.wav"
-- "narrator" → "reference_audio/male.wav"
-
-**CRITICAL**: Always provide full path to reference_audio when calling synthesize_audio!
-
-## Step-by-Step Workflow:
-1. Read chunks.json from output/.temp/staged/chunks.json  
-2. Parse the JSON to get array of chunks
-3. For each chunk in the array:
-   a. Extract: chunk["id"], chunk["text"], chunk["voice"], chunk["speed"]
-   b. Map voice name to reference_audio path (see mapping above)
-   c. **CALL synthesize_audio tool**:
-      - text=chunk["text"]  # Text already refined by TextRefinementAgent!
-      - output_path=f"chunk_{chunk['id']:04d}.wav"  # Just filename
-      - reference_audio="reference_audio/male.wav" (or appropriate mapping)
-      - voice=chunk["voice"]
-      - speed=chunk["speed"]
-      - use_temp_dir=True  # Saves to output/.temp/voices/
-   d. Check tool response for success/error
-4. After processing ALL chunks, call cleanup_tts_resources
-5. Report: "Synthesized N audio chunks successfully"
-
-## Example Tool Call:
+Example:
 ```python
 synthesize_audio(
-  text="The sun rose over the horizon...",
-  output_path="chunk_0000.wav",
+  text=chunk["text"],
+  output_path="chunk_0003.wav",
   reference_audio="reference_audio/male.wav",
-  voice="neutral",
-  speed=1.0
+  chunk_id=3,  # CRITICAL: Pass the chunk ID!
+  job_state_path="{job_state_path}"  # CRITICAL: Pass the state path!
 )
 ```
 
-## Error Recovery:
-If synthesis fails:
-- Try rewriting complex text
-- Adjust temperature/speed parameters
-- Fall back from Replicate to local if needed
-- Skip extremely problematic chunks (log warning)
+This allows users to resume from interruptions - the system tracks which chunks are complete!
+"""
+    
+    return LlmAgent(
+        name="VoiceGenerationAgent",
+        model=get_model_provider(),  # Auto-selects provider from env (Gemini/Ollama/OpenRouter)
+        tools=[synthesize_remaining_chunks],
+        instruction=f"""
+You are a voice synthesis agent. Your job is simple:
 
-Provide a summary of:
-- Total chunks synthesized
-- Failed chunks (if any)
-- TTS provider used (cloud/local)
-- Total audio duration generated
+**CALL THIS ONE TOOL:**
+synthesize_remaining_chunks(job_state_path="{job_state_path or ''}")
+
+That's it! This tool does EVERYTHING for you:
+- Checks state.json to see which chunks are already done
+- Reads chunks.json to get all chunks  
+- Synthesizes ONLY the chunks that aren't complete yet
+- Updates state after each chunk
+- Returns a summary
+
+**You just call the tool and report the result.**
+
+Example:
+    result = synthesize_remaining_chunks(job_state_path="{job_state_path or ''}")
+    
+    if result["status"] == "success":
+        print(f"Synthesized chunks_synthesized chunks")
+        print(f"Skipped chunks_skipped already complete")
+    else:
+        print(f"Error: error")
+
+The tool handles ALL the complexity - you just call it and report!
 """
     )

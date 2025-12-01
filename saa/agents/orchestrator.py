@@ -12,7 +12,8 @@ from google.adk.agents import LlmAgent
 from google.adk.runners import InMemoryRunner
 from google.adk.tools import AgentTool
 
-from saa.models import get_model_provider
+from saa.models import get_model_provider, JobState, ProcessingStage
+from saa.sessions.session_manager import create_session_service
 from saa.agents.extraction_agent import create_extraction_agent
 from saa.agents.staging_agent import create_staging_agent
 from saa.agents.refinement_agent import create_refinement_agent
@@ -113,6 +114,27 @@ class AudiobookOrchestrator:
         logger.info(f"[Orchestrator] Initialized for job: {self.job_id}")
         logger.info(f"[Orchestrator] Input: {input_file}")
         logger.info(f"[Orchestrator] Output: {self.job_output_dir}")
+        
+        # Initialize or load job state
+        self.state_path = self.job_output_dir / "state.json"
+        if self.state_path.exists():
+            logger.info(f"[Orchestrator] Loading existing job state from {self.state_path}")
+            self.state = JobState.load(self.state_path)
+            # Ensure job_id matches
+            if self.state.job_id != self.job_id:
+                logger.warning(f"[Orchestrator] Job ID mismatch in state file. Overwriting.")
+                self._init_new_state()
+        else:
+            self._init_new_state()
+            
+    def _init_new_state(self):
+        """Initialize a new job state"""
+        self.state = JobState(
+            job_id=self.job_id,
+            input_file=self.input_file,
+            output_dir=self.job_output_dir
+        )
+        self.state.save(self.state_path)
     
     def _create_debug_tool(self):
         """Create debugging tool for AI to report issues."""
@@ -175,6 +197,34 @@ class AudiobookOrchestrator:
             if exists:
                 result["size_bytes"] = path.stat().st_size
                 logger.info(f"[VERIFY] OK - {stage_name} output exists: {path}")
+                
+                # Update state based on stage
+                if stage_name == "ExtractionAgent":
+                    self.state.advance_stage(ProcessingStage.TEXT_CLEANING)
+                elif stage_name == "StagingAgent":
+                    # Read chunks.json to get total segment count
+                    try:
+                        import json
+                        chunks_path = Path("output/.temp/staged/chunks.json")
+                        if chunks_path.exists():
+                            with open(chunks_path, 'r', encoding='utf-8') as f:
+                                chunks_data = json.load(f)
+                                self.state.total_segments = len(chunks_data.get("chunks", []))
+                                logger.info(f"[VERIFY] Total segments set to: {self.state.total_segments}")
+                    except Exception as e:
+                        logger.warning(f"[VERIFY] Could not read chunks.json: {e}")
+                    
+                    self.state.advance_stage(ProcessingStage.SEGMENTATION)
+                elif stage_name == "TextRefinementAgent":
+                    self.state.advance_stage(ProcessingStage.VOICE_PLANNING)
+                elif stage_name == "VoiceGenerationAgent":
+                    self.state.advance_stage(ProcessingStage.AUDIO_MERGE)
+                elif stage_name == "MergeAgent":
+                    self.state.advance_stage(ProcessingStage.FINALIZATION)
+                
+                # Save checkpoint
+                self.state.save(self.state_path)
+                
             else:
                 logger.warning(f"[VERIFY] MISSING - {stage_name} output missing: {path}")
             
@@ -199,7 +249,9 @@ class AudiobookOrchestrator:
         extraction_agent = create_extraction_agent()
         staging_agent = create_staging_agent()
         refinement_agent = create_refinement_agent()  # NEW: Stage 2.5
-        voice_generation_agent = create_voice_generation_agent()
+        voice_generation_agent = create_voice_generation_agent(
+            job_state_path=str(self.state_path)  # Pass state path for resume
+        )
         merge_agent = create_merge_agent()
         cleanup_agent = create_cleanup_agent()
         
@@ -312,7 +364,24 @@ Output: {self.job_output_dir}
             )
             
             # Prepare initial prompt with clear instructions
-            prompt = f"""
+            if self.state.stage != ProcessingStage.PENDING:
+                # Resume mode - tell LLM what's already done
+                prompt = f"""
+RESUME JOB: {self.input_file}
+
+Current state: {self.state.stage.value}
+Completed segments: {len(self.state.completed_segments)}/{self.state.total_segments}
+
+**CRITICAL**: This is a RESUME, not a fresh start!
+- Check which files exist and RESUME from the next logical step. 
+- Do NOT re-do completed work.
+- SKIP any stages that have already produced output files.
+
+Report progress after each stage. Verify outputs exist. Handle errors gracefully.
+"""
+            else:
+                # Fresh start - normal prompt
+                prompt = f"""
 Generate audiobook from: {self.input_file}
 
 Execute the 5-stage pipeline:

@@ -37,7 +37,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 # Install PyTorch with CUDA (CRITICAL - do this FIRST!)
-pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # Install SAA in editable mode
 pip install -e .
@@ -329,6 +329,10 @@ pytest tests/unit/test_tools.py -v
 - **[TODO.md](TODO.md)** - Planned features
 - **[CHANGELOG.md](CHANGELOG.md)** - Version history
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Development guidelines
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture
+- **[INSTALL.md](docs/INSTALL.md)** - Detailed installation guide
+- **[LLM_PROVIDERS.md](docs/LLM_PROVIDERS.md)** - LLM provider configuration
+- **[RELEASE_NOTES.md](docs/RELEASE_NOTES.md)** - Release notes
 
 ---
 

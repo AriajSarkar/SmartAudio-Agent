@@ -179,7 +179,9 @@ def synthesize_audio(
     language: str = "en",
     temperature: float = 0.75,
     speed: float = 1.0,
-    use_temp_dir: bool = True
+    use_temp_dir: bool = True,
+    chunk_id: Optional[int] = None,
+    job_state_path: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Synthesize speech with automatic provider selection and fallback.
@@ -198,6 +200,8 @@ def synthesize_audio(
         temperature: Expressiveness
         speed: Playback speed
         use_temp_dir: Save chunks to temp directory (cleaned after merge)
+        chunk_id: Optional chunk ID for checkpoint tracking
+        job_state_path: Optional path to JobState JSON for checkpoint updates
     
     Returns:
         Dictionary with synthesis result and method used
@@ -238,8 +242,9 @@ def synthesize_audio(
             reference_audio=reference_audio
         )
         
-        # If successful, return
+        # If successful, update checkpoint
         if result["status"] == "success":
+            _update_chunk_checkpoint(chunk_id, job_state_path)
             return result
         
         # If fallback required, try local
@@ -261,6 +266,11 @@ def synthesize_audio(
             temperature=temperature,
             speed=speed
         )
+        
+        # Update checkpoint on success
+        if result["status"] == "success":
+            _update_chunk_checkpoint(chunk_id, job_state_path)
+        
         return result
     
     # Should not reach here
@@ -270,6 +280,29 @@ def synthesize_audio(
         "error": f"Invalid provider: {provider}",
         "synthesis_method": "unknown"
     }
+
+
+def _update_chunk_checkpoint(chunk_id: Optional[int], job_state_path: Optional[str]) -> None:
+    """Update JobState to mark chunk as completed"""
+    if chunk_id is None or job_state_path is None:
+        return
+    
+    try:
+        from saa.models import JobState
+        
+        state_path = Path(job_state_path)
+        if not state_path.exists():
+            logger.warning(f"[Checkpoint] State file not found: {job_state_path}")
+            return
+        
+        # Load, update, save
+        state = JobState.load(state_path)
+        state.mark_segment_completed(chunk_id)
+        state.save(state_path)
+        
+        logger.info(f"[Checkpoint] Marked chunk {chunk_id} complete ({len(state.completed_segments)}/{state.total_segments})")
+    except Exception as e:
+        logger.warning(f"[Checkpoint] Failed to update state: {e}")
 
 
 def cleanup_tts_resources() -> Dict[str, Any]:

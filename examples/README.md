@@ -73,7 +73,7 @@ results = evaluator.evaluate_extraction(input_file, expected_chars)
 
 These examples demonstrate **3+ required features** for the Kaggle capstone:
 
-1. ✅ **Multi-Agent System** - 5-stage AgentTool coordinator
+1. ✅ **Multi-Agent System** - 6-stage AgentTool coordinator
 2. ✅ **Custom Tools** - 17 function tools across 5 domains
 3. ✅ **Observability** - LoggingPlugin integration
 4. ✅ **Sessions & Memory** - InMemorySessionService / DatabaseSessionService

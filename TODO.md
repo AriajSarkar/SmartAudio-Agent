@@ -14,6 +14,7 @@
 - [x] CLI interface (Click + Rich)
 - [x] Character voice detection
 - [x] Audio merging and normalization
+- [x] Text Refinement Agent (Stage 2.5)
 - [x] Comprehensive documentation
 
 ### 🔄 In Progress
@@ -159,9 +160,9 @@
 ## 🐛 Known Issues
 
 ### Critical
-- [ ] Session database not yet implemented (InMemorySessionService placeholder)
-- [ ] Checkpoint save/load not functional
-- [ ] CLI `resume` command not implemented
+- [x] Session database not yet implemented (InMemorySessionService placeholder)
+- [x] Checkpoint save/load not functional
+- [x] CLI `resume` command not implemented
 - [ ] CLI `sample` command not implemented
 - [ ] No tests written yet
 

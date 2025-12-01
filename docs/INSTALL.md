@@ -5,7 +5,7 @@
 ### Step 1: Install PyTorch with CUDA (CRITICAL FIRST STEP)
 
 ```powershell
-pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
 ### Step 2: Install SAA Package
@@ -162,7 +162,7 @@ If `False`:
 ```powershell
 # Reinstall PyTorch with CUDA
 pip uninstall torch torchaudio
-pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 ```
 
 ### "GOOGLE_API_KEY not found"

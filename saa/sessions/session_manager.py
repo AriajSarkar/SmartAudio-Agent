@@ -62,6 +62,14 @@ def create_session_service(
             db_url = f"sqlite:///{db_url}"
         
         logger.info(f"Creating persistent session service: {db_url}")
+        
+        # Ensure directory exists for SQLite
+        if db_url.startswith("sqlite:///"):
+            path_str = db_url.replace("sqlite:///", "")
+            if path_str != ":memory:":
+                db_path_obj = Path(path_str)
+                db_path_obj.parent.mkdir(parents=True, exist_ok=True)
+                
         return DatabaseSessionService(db_url=db_url)
     else:
         logger.info("Creating in-memory session service (temporary)")

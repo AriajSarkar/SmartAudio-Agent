@@ -78,10 +78,31 @@ class JobState:
     
     @property
     def progress_percentage(self) -> float:
-        """Calculate progress percentage"""
-        if self.total_segments == 0:
-            return 0.0
-        return (len(self.completed_segments) / self.total_segments) * 100
+        """Calculate progress percentage based on pipeline stage"""
+        # Stage-based progress mapping
+        stage_progress = {
+            ProcessingStage.PENDING: 0.0,
+            ProcessingStage.DOCUMENT_LOAD: 10.0,
+            ProcessingStage.TEXT_CLEANING: 20.0,
+            ProcessingStage.SEGMENTATION: 35.0,
+            ProcessingStage.VOICE_PLANNING: 50.0,
+            ProcessingStage.SYNTHESIS: 65.0,
+            ProcessingStage.AUDIO_MERGE: 85.0,
+            ProcessingStage.FINALIZATION: 95.0,
+            ProcessingStage.COMPLETED: 100.0,
+            ProcessingStage.FAILED: 0.0,
+            ProcessingStage.CANCELLED: 0.0,
+        }
+        
+        # If we have segment data, use it for more granular progress during synthesis
+        if self.total_segments > 0 and self.stage in [ProcessingStage.SYNTHESIS, ProcessingStage.VOICE_PLANNING]:
+            base_progress = stage_progress.get(ProcessingStage.VOICE_PLANNING, 50.0)
+            segment_completion = (len(self.completed_segments) / self.total_segments)
+            # Synthesis stage is 50% to 85%, so segment progress covers 35%
+            segment_progress = segment_completion * 35.0
+            return min(base_progress + segment_progress, 85.0)
+        
+        return stage_progress.get(self.stage, 0.0)
     
     @property
     def pending_segments(self) -> List[int]:
@@ -159,3 +180,26 @@ class JobState:
                 data[field_name] = datetime.fromisoformat(data[field_name])
         
         return cls(**data)
+
+    def save(self, path: Path) -> None:
+        """Save state to JSON file"""
+        import json
+        
+        # Ensure directory exists
+        path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(self.to_dict(), f, indent=2, default=str)
+
+    @classmethod
+    def load(cls, path: Path) -> "JobState":
+        """Load state from JSON file"""
+        import json
+        
+        if not path.exists():
+            raise FileNotFoundError(f"Checkpoint not found: {path}")
+            
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+        return cls.from_dict(data)

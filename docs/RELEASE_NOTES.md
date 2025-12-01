@@ -127,7 +127,7 @@ python -m saa --help
 
 ```powershell
 # 1. Install PyTorch with CUDA
-pip install torch==2.1.0 torchaudio==2.1.0 --index-url https://download.pytorch.org/whl/cu118
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 # 2. Install SAA
 pip install -e .
